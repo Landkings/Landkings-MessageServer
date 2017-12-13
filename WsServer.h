@@ -21,10 +21,11 @@ private:
     uWS::Hub* _serverHub;
     uWS::Hub* _clientHub;
     uWS::WebSocket<uWS::SERVER>* _serverSocket;
+    std::unordered_set<uWS::WebSocket<uWS::SERVER>*> _clientSocket;
+    std::unordered_set<std::string> _clientIp;
     std::atomic<bool> _serverConnected;
     std::atomic<bool> _mapReceived;
     std::string _secretMessage;
-    std::unordered_set<std::string> _ipSet;
 
     std::string _loadedMap;
     std::string _loadedObjects;

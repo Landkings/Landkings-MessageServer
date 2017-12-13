@@ -164,12 +164,13 @@ void WsServer::onServerMessage(uWS::WebSocket<uWS::SERVER>* socket, char* messag
 
 void WsServer::onClientConnection(uWS::WebSocket<uWS::SERVER>* socket, uWS::HttpRequest request)
 {
-    if (_ipSet.find(socket->getAddress().address) != _ipSet.end()) // TODO: may be exist better way?
+    if (_clientIp.find(socket->getAddress().address) != _clientIp.end()) // TODO: may be exist better way?
     {
         socket->close(CC_DUPLICATED_CONNECTION);
         return;
     }
-    _ipSet.insert(socket->getAddress().address);
+    _clientIp.insert(socket->getAddress().address);
+    _clientSocket.insert(socket);
     if (!_mapReceived.load())
     {
         socket->close(CC_MAP_NOT_RECEIVED);
@@ -183,7 +184,11 @@ void WsServer::onClientDisconnection(uWS::WebSocket<uWS::SERVER>* socket, int co
 {
     log(string("Client disconnected: ") + socket->getAddress().family + socket->getAddress().address + ' ' +
         "with code: " + to_string(code));
-    _ipSet.erase(socket->getAddress().address);
+    if (_clientSocket.find(socket) != _clientSocket.end())
+    {
+        _clientSocket.erase(socket);
+        _clientIp.erase(socket->getAddress().address);
+    }
 }
 
 // *** LOG ***
