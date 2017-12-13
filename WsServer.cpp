@@ -13,6 +13,7 @@ using namespace boost::property_tree;
 
 
 constexpr int CC_MAP_NOT_RECEIVED = 4001;
+constexpr int CC_DUPLICATED_CONNECTION = 4002;
 
 
 WsServer::WsServer() : _serverHub(nullptr), _clientHub(nullptr),
@@ -121,16 +122,12 @@ void WsServer::setClientCallbacks()
 void WsServer::onServerConnection(uWS::WebSocket<uWS::SERVER>* socket, uWS::HttpRequest request)
 {
     log("Attempt connection as server");
-    string secret;
     Header h;
     if (_serverConnected.load())
         goto CloseSocket;
     h = request.getHeader("secret");
-    if (h.key != nullptr)
-        secret.assign(h.value, h.valueLength);
-    else
-        goto CloseSocket;
-    if (secret != _secretMessage)
+    if (!h.key || strncmp(h.value, _secretMessage.data(),
+                          std::min(h.valueLength, static_cast<unsigned int>(_secretMessage.length()))))
         goto CloseSocket;
     _serverConnected.store(true);
     socketSend(socket, "");
@@ -167,7 +164,12 @@ void WsServer::onServerMessage(uWS::WebSocket<uWS::SERVER>* socket, char* messag
 
 void WsServer::onClientConnection(uWS::WebSocket<uWS::SERVER>* socket, uWS::HttpRequest request)
 {
-    // TODO: disable spam 'socket = new WebSocket(...)' HOW???
+    if (_ipSet.find(socket->getAddress().address) != _ipSet.end()) // TODO: may be exist better way?
+    {
+        socket->close(CC_DUPLICATED_CONNECTION);
+        return;
+    }
+    _ipSet.insert(socket->getAddress().address);
     if (!_mapReceived.load())
     {
         socket->close(CC_MAP_NOT_RECEIVED);
@@ -181,6 +183,7 @@ void WsServer::onClientDisconnection(uWS::WebSocket<uWS::SERVER>* socket, int co
 {
     log(string("Client disconnected: ") + socket->getAddress().family + socket->getAddress().address + ' ' +
         "with code: " + to_string(code));
+    _ipSet.erase(socket->getAddress().address);
 }
 
 // *** LOG ***

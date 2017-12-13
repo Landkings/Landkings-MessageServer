@@ -24,7 +24,7 @@ int main(int argc, char** argv)
     {
         store(parse_command_line(argc, argv, desc), vm);
     }
-    catch (exception e)
+    catch (...)
     {
         cout << desc << endl;
         return 1;

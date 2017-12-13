@@ -3,6 +3,7 @@
 #include <mutex>
 #include <atomic>
 #include <deque>
+#include <unordered_set>
 
 #include <uWS/uWS.h>
 
@@ -23,6 +24,7 @@ private:
     std::atomic<bool> _serverConnected;
     std::atomic<bool> _mapReceived;
     std::string _secretMessage;
+    std::unordered_set<std::string> _ipSet;
 
     std::string _loadedMap;
     std::string _loadedObjects;
