@@ -16,10 +16,9 @@ constexpr int CC_MAP_NOT_RECEIVED = 4001;
 constexpr int CC_DUPLICATED_CONNECTION = 4002;
 
 
-WsServer::WsServer() : _serverHub(nullptr), _clientHub(nullptr),
-    _serverConnected(false), _mapReceived(false)
+WsServer::WsServer()
 {
-    getline(std::ifstream("secret.txt"), _secretMessage);
+
 }
 
 WsServer::~WsServer()
@@ -29,14 +28,12 @@ WsServer::~WsServer()
 
 void WsServer::terminate()
 {
+    _termination.store(true);
+    this_thread::sleep_for(chrono::seconds(5));
     terminateHub(_serverHub);
-    _serverHub = nullptr;
     terminateHub(_clientHub);
-    _clientHub = nullptr;
     if (_log.is_open())
         _log.close();
-    _serverConnected.store(false);
-    _mapReceived.store(false);
 }
 
 void WsServer::terminateHub(Hub *hub)
@@ -51,11 +48,29 @@ void WsServer::terminateHub(Hub *hub)
 
 // *** START ***
 
+void WsServer::init()
+{
+    getline(std::ifstream("secret.txt"), _secretMessage);
+    _log.open("ws-server.log", ios_base::app);
+    _serverHub = nullptr;
+    _clientHub = nullptr,
+    _serverSocket = nullptr;
+    _serverConnected.store(false);
+    _mapReceived.store(false);
+    _termination.store(false);
+    _logMutex.unlock();
+    _loadedMap = "";
+    _loadedObjects = "";
+    _logDeq.clear();
+    _clientIp.clear();
+    _clientSocket.clear();
+}
+
 void WsServer::start(uint16_t clientPort, uint16_t serverPort)
 {
+    init();
     thread([this]() // log thread
     {
-        _log.open("ws-server.log", ios_base::app);
         log("Log thread running");
         while (_log.is_open())
         {
@@ -64,6 +79,8 @@ void WsServer::start(uint16_t clientPort, uint16_t serverPort)
                 this_thread::sleep_for(chrono::nanoseconds(1));
             while (!_logDeq.empty())
             {
+                if (_termination)
+                    goto Termination;
                 cout << _logDeq[0];
                 _log << _logDeq[0];
                 _logDeq.pop_front();
@@ -72,6 +89,8 @@ void WsServer::start(uint16_t clientPort, uint16_t serverPort)
             cout.flush();
             _log.flush();
         }
+        Termination:
+        ;
     }).detach();
     this_thread::sleep_for(chrono::milliseconds(10));
     thread([this](uint16_t port) // server thread
@@ -126,8 +145,8 @@ void WsServer::onServerConnection(uWS::WebSocket<uWS::SERVER>* socket, uWS::Http
     if (_serverConnected.load())
         goto CloseSocket;
     h = request.getHeader("secret");
-    if (!h.key || strncmp(h.value, _secretMessage.data(),
-                          std::min(h.valueLength, static_cast<unsigned int>(_secretMessage.length()))))
+    if (!h.key || h.valueLength == 0 || strncmp(h.value, _secretMessage.data(),
+                          min(h.valueLength, static_cast<unsigned int>(_secretMessage.length()))))
         goto CloseSocket;
     _serverConnected.store(true);
     socketSend(socket, "");
@@ -244,6 +263,7 @@ void WsServer::processServerLoadObjects(uWS::WebSocket<SERVER>* socket, ptree& m
     _loadedObjects = s;
     log("Objects loaded");
     _clientHub->Group<SERVER>::broadcast(_loadedObjects.data(), _loadedObjects.length(), TEXT);
+    // TODO: may be parallel broadcast ?
 }
 
 void WsServer::processServerUnknown(uWS::WebSocket<SERVER>* socket, ptree& message)

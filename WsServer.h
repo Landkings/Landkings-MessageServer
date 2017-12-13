@@ -34,6 +34,8 @@ private:
     std::deque<std::string> _logDeq;
     std::mutex _logMutex;
 
+    std::atomic<bool> _termination;
+
     void setServerCallbacks();
     void setClientCallbacks();
 
@@ -66,4 +68,5 @@ private:
     bool ptreeFromString(const std::string& s, boost::property_tree::ptree& output) const;
     void stringFromPtree(const boost::property_tree::ptree& pt, std::string& output) const;
     void terminateHub(uWS::Hub* hub);
+    void init();
 };
