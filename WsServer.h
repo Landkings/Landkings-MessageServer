@@ -61,6 +61,6 @@ private:
     void sendMap(uWS::WebSocket<uWS::SERVER>* socket);
     void sendObjects(uWS::WebSocket<uWS::SERVER>* socket);
     bool ptreeFromString(const std::string& s, boost::property_tree::ptree& output) const;
-    void stringFromPtree(boost::property_tree::ptree& pt, std::string& output) const;
+    void stringFromPtree(const boost::property_tree::ptree& pt, std::string& output) const;
     void terminateHub(uWS::Hub* hub);
 };

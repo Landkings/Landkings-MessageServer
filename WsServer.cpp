@@ -288,7 +288,7 @@ bool WsServer::ptreeFromString(const string& s, ptree& output) const
     return true;
 }
 
-void WsServer::stringFromPtree(ptree& pt, string& output) const
+void WsServer::stringFromPtree(const ptree& pt, string& output) const
 {
     stringstream ss;
     json_parser::write_json(ss, pt);
