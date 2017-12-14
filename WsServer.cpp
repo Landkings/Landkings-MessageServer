@@ -24,6 +24,8 @@ WsServer::WsServer()
 
 WsServer::~WsServer()
 {
+    if (_logThreadTeminated)
+        return;
     terminate();
 }
 
@@ -44,14 +46,14 @@ void WsServer::terminateHub(Hub* hub)
     auto termCb = [](Async* async) -> void
     {
         Hub* hub = static_cast<Hub*>(async->getData());
-        //hub->Group<SERVER>::close(CC_TERMINATION);
+        hub->Group<SERVER>::close(CC_TERMINATION);
         hub->Group<SERVER>::terminate();
+        async->close();
     };
     Async* termAsync = new Async(hub->getLoop());
     termAsync->setData(static_cast<void*>(hub));
     termAsync->start(termCb);
     termAsync->send();
-    termAsync->close();
 }
 
 // *** START ***
