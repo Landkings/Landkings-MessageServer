@@ -42,26 +42,33 @@ int main(int argc, char** argv)
         cout << "1024 <= port <= 65535" << endl;
         return 1;
     }
-    /*
+
     uWS::Hub testPortHub;
     if (!testPortHub.listen(clientPort))
     {
         cout << "Can't listen client port " << clientPort << endl;
         return 1;
     }
+    testPortHub.getDefaultGroup<uWS::SERVER>().terminate();
     if (!testPortHub.listen(serverPort))
     {
         cout << "Can't listen server port " << serverPort << endl;
         return 1;
     }
     testPortHub.getDefaultGroup<uWS::SERVER>().terminate();
-    */
-    //***
+
+    //*********************
     WsServer wsServer;
     wsServer.start(clientPort, serverPort);
+    int seconds = 0;
     while (true)
     {
         std::this_thread::sleep_for(std::chrono::seconds(1));
+        if(++seconds % 5 == 0)
+        {
+            wsServer.terminate();
+            wsServer.start(clientPort, serverPort);
+        }
     }
     return 0;
 }

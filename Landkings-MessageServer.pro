@@ -5,6 +5,8 @@ CONFIG -= qt
 
 QMAKE_CXXFLAGS_WARN_ON += -Wno-unused-parameter
 
+QMAKE_CXXFLAGS += -DUSE_ASIO
+
 SOURCES += main.cpp \
     WsServer.cpp
 

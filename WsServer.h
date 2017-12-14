@@ -34,7 +34,9 @@ private:
     std::deque<std::string> _logDeq;
     std::mutex _logMutex;
 
-    std::atomic<bool> _termination;
+    std::atomic<bool> _logThreadTeminated;
+    std::atomic<bool> _serverThreadTerminated;
+    std::atomic<bool> _clientThreadTerminated;
 
     void setServerCallbacks();
     void setClientCallbacks();

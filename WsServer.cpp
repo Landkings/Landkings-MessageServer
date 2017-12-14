@@ -14,6 +14,7 @@ using namespace boost::property_tree;
 
 constexpr int CC_MAP_NOT_RECEIVED = 4001;
 constexpr int CC_DUPLICATED_CONNECTION = 4002;
+constexpr int CC_TERMINATION = 4003;
 
 
 WsServer::WsServer()
@@ -28,22 +29,29 @@ WsServer::~WsServer()
 
 void WsServer::terminate()
 {
-    _termination.store(true);
-    this_thread::sleep_for(chrono::seconds(5));
-    terminateHub(_serverHub);
+    log("Termination");
     terminateHub(_clientHub);
-    if (_log.is_open())
-        _log.close();
+    terminateHub(_serverHub);
+    while (!_logThreadTeminated.load()) // log terminated when client and server terminated
+        this_thread::sleep_for(chrono::milliseconds(10));
+    delete _clientHub;
+    delete _serverHub;
+    _log.close();
 }
 
-void WsServer::terminateHub(Hub *hub)
+void WsServer::terminateHub(Hub* hub)
 {
-    if (hub != nullptr)
+    auto termCb = [](Async* async) -> void
     {
-        hub->getDefaultGroup<SERVER>().close(1000);
-        hub->getDefaultGroup<SERVER>().terminate();
-        delete hub;
-    }
+        Hub* hub = static_cast<Hub*>(async->getData());
+        //hub->Group<SERVER>::close(CC_TERMINATION);
+        hub->Group<SERVER>::terminate();
+    };
+    Async* termAsync = new Async(hub->getLoop());
+    termAsync->setData(static_cast<void*>(hub));
+    termAsync->start(termCb);
+    termAsync->send();
+    termAsync->close();
 }
 
 // *** START ***
@@ -57,7 +65,9 @@ void WsServer::init()
     _serverSocket = nullptr;
     _serverConnected.store(false);
     _mapReceived.store(false);
-    _termination.store(false);
+    _logThreadTeminated.store(false);
+    _serverThreadTerminated.store(false);
+    _clientThreadTerminated.store(false);
     _logMutex.unlock();
     _loadedMap = "";
     _loadedObjects = "";
@@ -72,25 +82,26 @@ void WsServer::start(uint16_t clientPort, uint16_t serverPort)
     thread([this]() // log thread
     {
         log("Log thread running");
-        while (_log.is_open())
+        while (true)
         {
             this_thread::sleep_for(chrono::seconds(1));
             while (!_logMutex.try_lock())
                 this_thread::sleep_for(chrono::nanoseconds(1));
             while (!_logDeq.empty())
             {
-                if (_termination)
-                    goto Termination;
                 cout << _logDeq[0];
                 _log << _logDeq[0];
                 _logDeq.pop_front();
             }
-            _logMutex.unlock();
             cout.flush();
             _log.flush();
+            _logMutex.unlock();
+            if (_clientThreadTerminated.load() && _serverThreadTerminated.load())
+            {
+                _logThreadTeminated.store(true);
+                break;
+            }
         }
-        Termination:
-        ;
     }).detach();
     this_thread::sleep_for(chrono::milliseconds(10));
     thread([this](uint16_t port) // server thread
@@ -100,6 +111,7 @@ void WsServer::start(uint16_t clientPort, uint16_t serverPort)
         setServerCallbacks();
         _serverHub->listen(port);
         _serverHub->run();
+        _serverThreadTerminated.store(true);
     }, serverPort).detach();
     this_thread::sleep_for(chrono::milliseconds(10));
     thread([this](uint16_t port) // client thread
@@ -110,6 +122,7 @@ void WsServer::start(uint16_t clientPort, uint16_t serverPort)
         this_thread::sleep_for(chrono::seconds(2)); // for server connection
         log("Client thread running");
         _clientHub->run();
+        _clientThreadTerminated.store(true);
     }, clientPort).detach();
 }
 
@@ -145,8 +158,7 @@ void WsServer::onServerConnection(uWS::WebSocket<uWS::SERVER>* socket, uWS::Http
     if (_serverConnected.load())
         goto CloseSocket;
     h = request.getHeader("secret");
-    if (!h.key || h.valueLength == 0 || strncmp(h.value, _secretMessage.data(),
-                          min(h.valueLength, static_cast<unsigned int>(_secretMessage.length()))))
+    if (!h.key || h.valueLength != _secretMessage.length() || strncmp(h.value, _secretMessage.data(), h.valueLength))
         goto CloseSocket;
     _serverConnected.store(true);
     socketSend(socket, "");
@@ -262,7 +274,7 @@ void WsServer::processServerLoadObjects(uWS::WebSocket<SERVER>* socket, ptree& m
     stringFromPtree(message, s);
     _loadedObjects = s;
     log("Objects loaded");
-    _clientHub->Group<SERVER>::broadcast(_loadedObjects.data(), _loadedObjects.length(), TEXT);
+    _clientHub->Group<SERVER>::broadcast(_loadedObjects.data(), _loadedObjects.length(), TEXT); // thread safe
     // TODO: may be parallel broadcast ?
 }
 
