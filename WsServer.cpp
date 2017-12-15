@@ -33,7 +33,7 @@ void WsServer::terminate()
         return;
     while (!_started.load())
         this_thread::sleep_for(chrono::nanoseconds(1));
-    log("Termination...");
+    log("Termination");
     terminateHub(_clientHub);
     terminateHub(_serverHub);
     while (!_logThreadTeminated.load()) // log terminated when client and server terminated
@@ -83,6 +83,8 @@ void WsServer::init()
 
 void WsServer::start(uint16_t clientPort, uint16_t serverPort)
 {
+    _clientPort = clientPort;
+    _serverPort = serverPort;
     init();
     thread(&WsServer::logThreadFunction, this).detach();
     this_thread::sleep_for(chrono::milliseconds(10));
@@ -91,8 +93,6 @@ void WsServer::start(uint16_t clientPort, uint16_t serverPort)
     thread(&WsServer::clientThreadFunction, this, _clientPort).detach();
     this_thread::sleep_for(chrono::milliseconds(10));
     _started.store(true);
-    _clientPort = clientPort;
-    _serverPort = serverPort;
 }
 
 void WsServer::restart()
