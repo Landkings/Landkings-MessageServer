@@ -33,7 +33,7 @@ void WsServer::terminate()
         return;
     while (!_started.load())
         this_thread::sleep_for(chrono::nanoseconds(1));
-    log("Termination");
+    log("Termination...");
     terminateHub(_clientHub);
     terminateHub(_serverHub);
     while (!_logThreadTeminated.load()) // log terminated when client and server terminated
@@ -86,11 +86,19 @@ void WsServer::start(uint16_t clientPort, uint16_t serverPort)
     init();
     thread(&WsServer::logThreadFunction, this).detach();
     this_thread::sleep_for(chrono::milliseconds(10));
-    thread(&WsServer::serverThreadFunction, this, serverPort).detach();
+    thread(&WsServer::serverThreadFunction, this, _serverPort).detach();
     this_thread::sleep_for(chrono::seconds(1));
-    thread(&WsServer::clientThreadFunction, this, clientPort).detach();
+    thread(&WsServer::clientThreadFunction, this, _clientPort).detach();
     this_thread::sleep_for(chrono::milliseconds(10));
     _started.store(true);
+    _clientPort = clientPort;
+    _serverPort = serverPort;
+}
+
+void WsServer::restart()
+{
+    terminate();
+    start(_clientPort, _serverPort);
 }
 
 void WsServer::logThreadFunction()
@@ -126,10 +134,10 @@ void WsServer::serverThreadFunction(uint16_t port)
 
 void WsServer::clientThreadFunction(uint16_t port)
 {
+    log("Client thread running");
     _clientHub = new Hub();
     setClientCallbacks();
     _clientHub->listen(port, nullptr);
-    log("Client thread running");
     _clientHub->run();
     _clientThreadTerminated.store(true);
     log("Client thread terminated");

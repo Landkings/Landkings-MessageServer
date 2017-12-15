@@ -39,6 +39,9 @@ private:
     std::atomic<bool> _serverThreadTerminated;
     std::atomic<bool> _clientThreadTerminated;
 
+    uint16_t _serverPort;
+    uint16_t _clientPort;
+
     void logThreadFunction();
     void serverThreadFunction(uint16_t port);
     void clientThreadFunction(uint16_t port);
@@ -77,4 +80,5 @@ private:
     void stringFromPtree(const boost::property_tree::ptree& pt, std::string& output) const;
     void terminateHub(uWS::Hub* hub);
     void init();
+    void restart();
 };
