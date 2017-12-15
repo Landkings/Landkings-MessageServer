@@ -34,9 +34,14 @@ private:
     std::deque<std::string> _logDeq;
     std::mutex _logMutex;
 
+    std::atomic<bool> _started;
     std::atomic<bool> _logThreadTeminated;
     std::atomic<bool> _serverThreadTerminated;
     std::atomic<bool> _clientThreadTerminated;
+
+    void logThreadFunction();
+    void serverThreadFunction(uint16_t port);
+    void clientThreadFunction(uint16_t port);
 
     void setServerCallbacks();
     void setClientCallbacks();
@@ -49,6 +54,7 @@ private:
     void onClientDisconnection(uWS::WebSocket<uWS::SERVER>* socket, int code, char* message, size_t length);
 
     void log(std::string msg);
+    void printLogDeq();
 
     enum class SMessageType
     {

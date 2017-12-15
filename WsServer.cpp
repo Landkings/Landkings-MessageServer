@@ -24,13 +24,15 @@ WsServer::WsServer()
 
 WsServer::~WsServer()
 {
-    if (_logThreadTeminated)
-        return;
     terminate();
 }
 
 void WsServer::terminate()
 {
+    if (_logThreadTeminated)
+        return;
+    while (!_started.load())
+        this_thread::sleep_for(chrono::nanoseconds(1));
     log("Termination");
     terminateHub(_clientHub);
     terminateHub(_serverHub);
@@ -67,6 +69,7 @@ void WsServer::init()
     _serverSocket = nullptr;
     _serverConnected.store(false);
     _mapReceived.store(false);
+    _started.store(false);
     _logThreadTeminated.store(false);
     _serverThreadTerminated.store(false);
     _clientThreadTerminated.store(false);
@@ -81,51 +84,55 @@ void WsServer::init()
 void WsServer::start(uint16_t clientPort, uint16_t serverPort)
 {
     init();
-    thread([this]() // log thread
+    thread(&WsServer::logThreadFunction, this).detach();
+    this_thread::sleep_for(chrono::milliseconds(10));
+    thread(&WsServer::serverThreadFunction, this, serverPort).detach();
+    this_thread::sleep_for(chrono::seconds(1));
+    thread(&WsServer::clientThreadFunction, this, clientPort).detach();
+    this_thread::sleep_for(chrono::milliseconds(10));
+    _started.store(true);
+}
+
+void WsServer::logThreadFunction()
+{
+    log("Log thread running");
+    while (true)
     {
-        log("Log thread running");
-        while (true)
+        this_thread::sleep_for(chrono::seconds(1));
+        while (!_logMutex.try_lock())
+            this_thread::sleep_for(chrono::nanoseconds(1));
+        printLogDeq();
+        _logMutex.unlock();
+        if (_clientThreadTerminated.load() && _serverThreadTerminated.load())
         {
-            this_thread::sleep_for(chrono::seconds(1));
-            while (!_logMutex.try_lock())
-                this_thread::sleep_for(chrono::nanoseconds(1));
-            while (!_logDeq.empty())
-            {
-                cout << _logDeq[0];
-                _log << _logDeq[0];
-                _logDeq.pop_front();
-            }
-            cout.flush();
-            _log.flush();
-            _logMutex.unlock();
-            if (_clientThreadTerminated.load() && _serverThreadTerminated.load())
-            {
-                _logThreadTeminated.store(true);
-                break;
-            }
+            _logThreadTeminated.store(true);
+            log("Log thread terminated");
+            printLogDeq();
+            break;
         }
-    }).detach();
-    this_thread::sleep_for(chrono::milliseconds(10));
-    thread([this](uint16_t port) // server thread
-    {
-        log("Server thread running");
-        _serverHub = new Hub();
-        setServerCallbacks();
-        _serverHub->listen(port);
-        _serverHub->run();
-        _serverThreadTerminated.store(true);
-    }, serverPort).detach();
-    this_thread::sleep_for(chrono::milliseconds(10));
-    thread([this](uint16_t port) // client thread
-    {
-        _clientHub = new Hub();
-        setClientCallbacks();
-        _clientHub->listen(port, nullptr);
-        this_thread::sleep_for(chrono::seconds(2)); // for server connection
-        log("Client thread running");
-        _clientHub->run();
-        _clientThreadTerminated.store(true);
-    }, clientPort).detach();
+    }
+}
+
+void WsServer::serverThreadFunction(uint16_t port)
+{
+    log("Server thread running");
+    _serverHub = new Hub();
+    setServerCallbacks();
+    _serverHub->listen(port);
+    _serverHub->run();
+    _serverThreadTerminated.store(true);
+    log("Server thread terminated");
+}
+
+void WsServer::clientThreadFunction(uint16_t port)
+{
+    _clientHub = new Hub();
+    setClientCallbacks();
+    _clientHub->listen(port, nullptr);
+    log("Client thread running");
+    _clientHub->run();
+    _clientThreadTerminated.store(true);
+    log("Client thread terminated");
 }
 
 void WsServer::setServerCallbacks()
@@ -242,6 +249,18 @@ void WsServer::log(string msg)
         this_thread::sleep_for(chrono::nanoseconds(1));
     _logDeq.push_back(buffer.str());
     _logMutex.unlock();
+}
+
+void WsServer::printLogDeq()
+{
+    while (!_logDeq.empty())
+    {
+        cout << _logDeq[0];
+        _log << _logDeq[0];
+        _logDeq.pop_front();
+    }
+    cout.flush();
+    _log.flush();
 }
 
 // *** SERVER MESSAGE ***

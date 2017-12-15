@@ -35,9 +35,6 @@ int main(int argc, char** argv)
         cout << desc << endl;
         return 0;
     }
-    clientPort = vm["cp"].as<int>();
-    serverPort = vm["sp"].as<int>();
-    time = vm["time"].as<int>();
     if (clientPort < 1024 || clientPort > 65535 || clientPort < 1024 || clientPort > 65535)
     {
         cout << "1024 <= port <= 65535" << endl;
@@ -67,7 +64,7 @@ int main(int argc, char** argv)
     //*********************
     WsServer wsServer;
     wsServer.start(clientPort, serverPort);
-    if (time > 0)
+    if (time >= 0)
         this_thread::sleep_for(chrono::seconds(time));
     else
         while (true)
