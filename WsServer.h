@@ -61,12 +61,12 @@ private:
     void log(std::string msg);
     void printLogDeq();
 
-    enum class SMessageType
+    enum class SInMessageType
     {
-        unknown, loadMap, loadObjects
+        unknown = -1, loadMap, loadObjects
     };
 
-    SMessageType getServerMessageType(boost::property_tree::ptree& message) const;
+    SInMessageType getServerMessageType(boost::property_tree::ptree& message) const;
 
     void processServerMessage(uWS::WebSocket<uWS::SERVER>* socket, boost::property_tree::ptree& message);
 
@@ -75,7 +75,9 @@ private:
     void processServerUnknown(uWS::WebSocket<uWS::SERVER>* socket, boost::property_tree::ptree& message);
     void processServerSecretMessageAnswer(uWS::WebSocket<uWS::SERVER>* socket, boost::property_tree::ptree& message);
 
-    void socketSend(uWS::WebSocket<uWS::SERVER>* socket, std::string message);
+    void sendAcceptConnection();
+    void socketSend(uWS::WebSocket<uWS::SERVER>* socket, const std::string& message);
+    void socketSend(uWS::WebSocket<uWS::SERVER>* socket, const boost::property_tree::ptree& message);
     void sendMap(uWS::WebSocket<uWS::SERVER>* socket);
     void sendObjects(uWS::WebSocket<uWS::SERVER>* socket);
     bool ptreeFromString(const std::string& s, boost::property_tree::ptree& output) const;

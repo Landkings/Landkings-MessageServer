@@ -36,10 +36,12 @@ void WsServer::terminate()
     log("Termination");
     terminateHub(_clientHub);
     terminateHub(_serverHub);
+    terminateHub(_webServerHub);
     while (!_logThreadTeminated.load()) // log terminated when client and server terminated
         this_thread::sleep_for(chrono::milliseconds(10));
     delete _clientHub;
     delete _serverHub;
+    delete _webServerHub;
     _log.close();
 }
 
@@ -96,7 +98,7 @@ void WsServer::start(uint16_t clientPort, uint16_t serverPort, uint16_t webServe
     thread(&WsServer::serverThreadFunction, this, _serverPort).detach();
     this_thread::sleep_for(chrono::milliseconds(10));
     thread(&WsServer::webServerThreadFunction, this, _webServerPort).detach();
-    this_thread::sleep_for(chrono::seconds(1));
+    this_thread::sleep_for(chrono::milliseconds(10));
     thread(&WsServer::clientThreadFunction, this, _clientPort).detach();
     this_thread::sleep_for(chrono::milliseconds(10));
     _started.store(true);
@@ -118,7 +120,7 @@ void WsServer::logThreadFunction()
             this_thread::sleep_for(chrono::nanoseconds(1));
         printLogDeq();
         _logMutex.unlock();
-        if (_clientThreadTerminated.load() && _serverThreadTerminated.load())
+        if (_clientThreadTerminated.load() && _serverThreadTerminated.load() && _webServerThreadTerminated.load())
         {
             _logThreadTeminated.store(true);
             log("Log thread terminated");
@@ -206,9 +208,9 @@ void WsServer::onServerConnection(uWS::WebSocket<uWS::SERVER>* socket, uWS::Http
     if (!h.key || h.valueLength != _secretMessage.length() || strncmp(h.value, _secretMessage.data(), h.valueLength))
         goto CloseSocket;
     _serverConnected.store(true);
-    socketSend(socket, "");
-    log("Server connected");
     _serverSocket = socket;
+    sendAcceptConnection();
+    log("Server connected");
     return;
 CloseSocket:
     log("Unsuccessful attempt");
@@ -238,10 +240,21 @@ void WsServer::onServerMessage(uWS::WebSocket<uWS::SERVER>* socket, char* messag
 
 // *** WEB SERVER CALLBACKS ***
 
-void WsServer::onWebServerHttpRequest(HttpResponse* response, HttpRequest request,
-                                      char* data, size_t length, size_t remainingBytes)
+void WsServer::onWebServerHttpRequest(HttpResponse* response, HttpRequest request, char* data, size_t length, size_t remainingBytes)
 {
-    _serverSocket->send("http request with code and nickname");
+    // TODO: check web server
+    Header codeHeader = request.getHeader("sourceCode");
+    Header nickHeader = request.getHeader("nickname");
+    if (!codeHeader.key || !nickHeader.key)
+    {
+        _serverSocket->send("http request");
+        // TODO: something
+    }
+    ptree pt;
+    pt.put<string>("messageType", "acceptConnection");
+    pt.put<string>("sourceCode", string(codeHeader.value, codeHeader.valueLength));
+    pt.put<string>("nickname", string(nickHeader.value, nickHeader.valueLength));
+    socketSend(_serverSocket, pt);
 }
 
 // *** CLIENT CALLBACKS ***
@@ -311,16 +324,16 @@ void WsServer::printLogDeq()
 
 void WsServer::processServerMessage(uWS::WebSocket<SERVER>* socket, ptree& message)
 {
-    SMessageType type = getServerMessageType(message);
+    SInMessageType type = getServerMessageType(message);
     switch (type)
     {
-        case SMessageType::loadMap:
+        case SInMessageType::loadMap:
             processServerLoadMap(socket, message);
             return;
-        case SMessageType::loadObjects:
+        case SInMessageType::loadObjects:
             processServerLoadObjects(socket, message);
             return;
-        case SMessageType::unknown:
+        case SInMessageType::unknown:
             processServerUnknown(socket, message);
             return;
     }
@@ -349,7 +362,7 @@ void WsServer::processServerUnknown(uWS::WebSocket<SERVER>* socket, ptree& messa
 
 }
 
-WsServer::SMessageType WsServer::getServerMessageType(ptree& message) const
+WsServer::SInMessageType WsServer::getServerMessageType(ptree& message) const
 {
     string messageType;
     try
@@ -358,16 +371,21 @@ WsServer::SMessageType WsServer::getServerMessageType(ptree& message) const
     }
     catch (...)
     {
-        return SMessageType::unknown;
+        return SInMessageType::unknown;
     }
     if (messageType == "loadMap")
-        return SMessageType::loadMap;
+        return SInMessageType::loadMap;
     if (messageType == "loadObjects")
-        return SMessageType::loadObjects;
-    return SMessageType::unknown;
+        return SInMessageType::loadObjects;
+    return SInMessageType::unknown;
 }
 
 // ***************************************
+
+void WsServer::sendAcceptConnection()
+{
+    socketSend(_serverSocket, "{\"messageType\" : \"acceptConnection\"}");
+}
 
 void WsServer::sendMap(uWS::WebSocket<SERVER>* socket)
 {
@@ -401,7 +419,14 @@ void WsServer::stringFromPtree(const ptree& pt, string& output) const
     output = ss.str();
 }
 
-void WsServer::socketSend(uWS::WebSocket<SERVER>* socket, string message)
+void WsServer::socketSend(uWS::WebSocket<SERVER>* socket, const string& message)
 {
     socket->send(message.data(), message.length(), TEXT);
+}
+
+void WsServer::socketSend(uWS::WebSocket<SERVER>* socket, const ptree& message)
+{
+    string s;
+    stringFromPtree(message, s);
+    socket->send(s.data(), s.length(), TEXT);
 }
