@@ -243,15 +243,17 @@ void WsServer::onServerMessage(uWS::WebSocket<uWS::SERVER>* socket, char* messag
 void WsServer::onWebServerHttpRequest(HttpResponse* response, HttpRequest request, char* data, size_t length, size_t remainingBytes)
 {
     // TODO: check web server
-    Header codeHeader = request.getHeader("sourceCode");
+    Header codeHeader = request.getHeader("sourcecode");
     Header nickHeader = request.getHeader("nickname");
     if (!codeHeader.key || !nickHeader.key)
     {
-        _serverSocket->send("http request");
+        if (_serverHubReady.load())
+            _serverSocket->send("http request");
+        return;
         // TODO: something
     }
     ptree pt;
-    pt.put<string>("messageType", "acceptConnection");
+    pt.put<string>("messageType", "newPlayer");
     pt.put<string>("sourceCode", string(codeHeader.value, codeHeader.valueLength));
     pt.put<string>("nickname", string(nickHeader.value, nickHeader.valueLength));
     socketSend(_serverSocket, pt);
