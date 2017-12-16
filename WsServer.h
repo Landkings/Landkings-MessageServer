@@ -15,7 +15,7 @@ class WsServer
 public:
     WsServer();
     ~WsServer();
-    void start(uint16_t clientPort, uint16_t serverPort);
+    void start(uint16_t clientPort, uint16_t serverPort, uint16_t webServerPort);
     void terminate();
 private:
     uWS::Hub* _serverHub;
@@ -83,4 +83,14 @@ private:
     void terminateHub(uWS::Hub* hub);
     void init();
     void restart();
+
+    //****** http part **********
+    uWS::Hub* _webServerHub;
+    std::atomic<bool> _webServerThreadTerminated;
+    std::atomic<bool> _webServerHubReady;
+    uint16_t _webServerPort;
+    void webServerThreadFunction(uint16_t port);
+    void onWebServerHttpRequest(uWS::HttpResponse* response, uWS::HttpRequest request,
+                                char *data, size_t length, size_t remainingBytes);
+    void setWebServerCallbacks();
 };

@@ -68,12 +68,14 @@ void WsServer::init()
     _clientHub = nullptr;
     _clientHubReady.store(false);
     _serverHubReady.store(false);
+    _webServerHubReady.store(false);
     _serverSocket = nullptr;
     _serverConnected.store(false);
     _mapReceived.store(false);
     _started.store(false);
     _logThreadTeminated.store(false);
     _serverThreadTerminated.store(false);
+    _webServerThreadTerminated.store(false);
     _clientThreadTerminated.store(false);
     _logMutex.unlock();
     _loadedMap = "";
@@ -83,14 +85,17 @@ void WsServer::init()
     _clientSocket.clear();
 }
 
-void WsServer::start(uint16_t clientPort, uint16_t serverPort)
+void WsServer::start(uint16_t clientPort, uint16_t serverPort, uint16_t webServerPort)
 {
     _clientPort = clientPort;
     _serverPort = serverPort;
+    _webServerPort = webServerPort;
     init();
     thread(&WsServer::logThreadFunction, this).detach();
     this_thread::sleep_for(chrono::milliseconds(10));
     thread(&WsServer::serverThreadFunction, this, _serverPort).detach();
+    this_thread::sleep_for(chrono::milliseconds(10));
+    thread(&WsServer::webServerThreadFunction, this, _webServerPort).detach();
     this_thread::sleep_for(chrono::seconds(1));
     thread(&WsServer::clientThreadFunction, this, _clientPort).detach();
     this_thread::sleep_for(chrono::milliseconds(10));
@@ -100,7 +105,7 @@ void WsServer::start(uint16_t clientPort, uint16_t serverPort)
 void WsServer::restart()
 {
     terminate();
-    start(_clientPort, _serverPort);
+    start(_clientPort, _serverPort, _webServerPort);
 }
 
 void WsServer::logThreadFunction()
@@ -135,6 +140,18 @@ void WsServer::serverThreadFunction(uint16_t port)
     log("Server thread terminated");
 }
 
+void WsServer::webServerThreadFunction(uint16_t port)
+{
+    log("Web server thread running");
+    _webServerHub = new Hub();
+    setWebServerCallbacks();
+    _webServerHub->listen(port);
+    _webServerHubReady.store(true);
+    _webServerHub->run();
+    _webServerThreadTerminated.store(true);
+    log("Web server thread terminated");
+}
+
 void WsServer::clientThreadFunction(uint16_t port)
 {
     log("Client thread running");
@@ -158,6 +175,13 @@ void WsServer::setServerCallbacks()
     _serverHub->onConnection(connectionHandler);
     _serverHub->onDisconnection(disconnectionHandler);
     _serverHub->onMessage(messageHandler);
+}
+
+void WsServer::setWebServerCallbacks()
+{
+    auto requestHandler = bind(&WsServer::onWebServerHttpRequest, this,
+                               placeholders::_1, placeholders::_2, placeholders::_3, placeholders::_4, placeholders::_5);
+    _webServerHub->onHttpRequest(requestHandler);
 }
 
 void WsServer::setClientCallbacks()
@@ -210,6 +234,14 @@ void WsServer::onServerMessage(uWS::WebSocket<uWS::SERVER>* socket, char* messag
         return;
     }
     processServerMessage(socket, pt);
+}
+
+// *** WEB SERVER CALLBACKS ***
+
+void WsServer::onWebServerHttpRequest(HttpResponse* response, HttpRequest request,
+                                      char* data, size_t length, size_t remainingBytes)
+{
+    _serverSocket->send("http request with code and nickname");
 }
 
 // *** CLIENT CALLBACKS ***

@@ -62,8 +62,9 @@ int main(int argc, char** argv)
         testServerPortHub.getDefaultGroup<uWS::SERVER>().terminate();
     }
     //*********************
+    uint16_t webServerPort = 19997; // TODO: ***
     WsServer wsServer;
-    wsServer.start(clientPort, serverPort);
+    wsServer.start(clientPort, serverPort, webServerPort);
     if (time >= 0)
         this_thread::sleep_for(chrono::seconds(time));
     else
