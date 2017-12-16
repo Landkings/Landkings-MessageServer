@@ -65,7 +65,9 @@ void WsServer::init()
     getline(std::ifstream("secret.txt"), _secretMessage);
     _log.open("ws-server.log", ios_base::app);
     _serverHub = nullptr;
-    _clientHub = nullptr,
+    _clientHub = nullptr;
+    _clientHubReady.store(false);
+    _serverHubReady.store(false);
     _serverSocket = nullptr;
     _serverConnected.store(false);
     _mapReceived.store(false);
@@ -127,6 +129,7 @@ void WsServer::serverThreadFunction(uint16_t port)
     _serverHub = new Hub();
     setServerCallbacks();
     _serverHub->listen(port);
+    _serverHubReady.store(true);
     _serverHub->run();
     _serverThreadTerminated.store(true);
     log("Server thread terminated");
@@ -138,6 +141,7 @@ void WsServer::clientThreadFunction(uint16_t port)
     _clientHub = new Hub();
     setClientCallbacks();
     _clientHub->listen(port, nullptr);
+    _clientHubReady.store(true);
     _clientHub->run();
     _clientThreadTerminated.store(true);
     log("Client thread terminated");
@@ -303,7 +307,8 @@ void WsServer::processServerLoadObjects(uWS::WebSocket<SERVER>* socket, ptree& m
     stringFromPtree(message, s);
     _loadedObjects = s;
     log("Objects loaded");
-    _clientHub->Group<SERVER>::broadcast(_loadedObjects.data(), _loadedObjects.length(), TEXT); // thread safe
+    if (_clientHubReady.load())
+        _clientHub->Group<SERVER>::broadcast(_loadedObjects.data(), _loadedObjects.length(), TEXT); // thread safe
     // TODO: may be parallel broadcast ?
 }
 

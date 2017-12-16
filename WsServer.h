@@ -19,7 +19,9 @@ public:
     void terminate();
 private:
     uWS::Hub* _serverHub;
+    std::atomic<bool> _serverHubReady;
     uWS::Hub* _clientHub;
+    std::atomic<bool> _clientHubReady;
     uWS::WebSocket<uWS::SERVER>* _serverSocket;
     std::unordered_set<uWS::WebSocket<uWS::SERVER>*> _clientSocket;
     std::unordered_set<std::string> _clientIp;
