@@ -3,7 +3,7 @@
 
 #include <boost/program_options.hpp>
 
-#include "WsServer.h"
+#include "MessageServer.h"
 
 using namespace std;
 using namespace boost::program_options;
@@ -12,11 +12,13 @@ using namespace boost::program_options;
 int main(int argc, char** argv)
 {
     options_description desc;
-    int clientPort, serverPort, time;
+    vector<int> usePort(3);
+    int time;
     desc.add_options()
             ("help,h", "Print options list")
-            ("cp,c", value<int>(&clientPort)->default_value(19999), "Port for clients")
-            ("sp,s", value<int>(&serverPort)->default_value(19998), "Port for game server")
+            ("sp,s", value<int>(&usePort[0])->default_value(19998), "Port for game server")
+            ("wp,w", value<int>(&usePort[1])->default_value(19997), "Port for web server")
+            ("cp,c", value<int>(&usePort[2])->default_value(19999), "Port for clients")
             ("time,t", value<int>(&time)->default_value(-1), "Time in seconds through server terminated\n"
                                                              "val < 0 -> never");
     variables_map vm;
@@ -35,36 +37,30 @@ int main(int argc, char** argv)
         cout << desc << endl;
         return 0;
     }
-    if (clientPort < 1024 || clientPort > 65535 || clientPort < 1024 || clientPort > 65535)
+    for (unsigned i = 0; i < usePort.size(); ++i)
     {
-        cout << "1024 <= port <= 65535" << endl;
-        return 1;
-    }
-    if (clientPort == serverPort)
-    {
-        cout << "Server port == Client port" << endl;
-        return 1;
-    }
-    {
-        uWS::Hub testClientPortHub;
-        if (!testClientPortHub.listen(clientPort))
+        if (usePort[i] < 1024 || usePort[i] > 65535)
         {
-            cout << "Can't listen client port " << clientPort << endl;
+            cout << "1024 <= port <= 65535" << endl;
             return 1;
         }
-        uWS::Hub testServerPortHub;
-        if (!testServerPortHub.listen(serverPort))
+        uWS::Hub testPortHub;
+        if (!testPortHub.listen(usePort[i]))
         {
-            cout << "Can't listen server port " << serverPort << endl;
+            cout << "Can't listen port " << usePort[i] << endl;
             return 1;
         }
-        testClientPortHub.getDefaultGroup<uWS::SERVER>().terminate();
-        testServerPortHub.getDefaultGroup<uWS::SERVER>().terminate();
+        testPortHub.uWS::Group<uWS::SERVER>::terminate();
+        for (unsigned j = i + 1; j < usePort.size(); ++j)
+            if (usePort[i] == usePort[j])
+            {
+                cout << "Ports must be different" << endl;
+                return 1;
+            }
     }
     //*********************
-    uint16_t webServerPort = 19997; // TODO: ***
-    WsServer wsServer;
-    wsServer.start(clientPort, serverPort, webServerPort);
+    MessageServer wsServer;
+    wsServer.start(usePort[0], usePort[1], usePort[2]);
     if (time >= 0)
         this_thread::sleep_for(chrono::seconds(time));
     else
