@@ -4,6 +4,7 @@
 #include <iostream>
 #include <functional>
 #include <chrono>
+#include <unordered_map>
 
 #include <boost/property_tree/json_parser.hpp>
 
@@ -27,6 +28,8 @@ MessageServer::~MessageServer()
     terminate();
 }
 
+// *** TERMINATION ***
+
 void MessageServer::terminate()
 {
     if (_logThreadTeminated)
@@ -34,30 +37,37 @@ void MessageServer::terminate()
     while (!_started.load())
         this_thread::sleep_for(chrono::nanoseconds(1));
     log("Termination");
-    terminateHub(_webServerHub, _webServerThreadTerminated); //  termination order is important
-    terminateHub(_serverHub, _serverThreadTerminated);
-    terminateHub(_clientHub, _clientThreadTerminated);
+    terminateHub(_webServerHub, 0);
+    terminateHub(_serverHub, 1);
+    terminateHub(_clientHub, 2);
     while (!_logThreadTeminated.load())
         this_thread::sleep_for(chrono::milliseconds(10));
     _log.close();
 }
 
-void MessageServer::terminateHub(Hub* hub, const atomic<bool>& confirmer)
+void MessageServer::terminateHub(Hub* hub, int i)
 {
+    static vector<atomic<bool>> terminatedHub(3);
     auto termCb = [](Async* async) -> void
     {
-        Hub* hub = static_cast<Hub*>(async->getData());
-        hub->Group<SERVER>::close(CC_TERMINATION);
-        hub->Group<SERVER>::terminate();
+        void* data = async->getData();
+        terminatedHub[*static_cast<int*>(data + sizeof(Hub*))].store(true);
+        while (!terminatedHub[0].load() || !terminatedHub[1].load() || !terminatedHub[2].load())
+            this_thread::sleep_for(chrono::milliseconds(50));
+        Hub* h = *static_cast<Hub**>(data);
+        h->Group<SERVER>::close(CC_TERMINATION);
+        h->Group<SERVER>::terminate();
         async->close();
+        free(data);
     };
+    terminatedHub[i].store(false);
+    void* args = malloc(sizeof(Hub*) + sizeof(int));
     Async* termAsync = new Async(hub->getLoop());
-    termAsync->setData(static_cast<void*>(hub));
+    *(static_cast<Hub**>(args)) = hub;
+    *(int*)(args + sizeof(Hub*)) = i;
+    termAsync->setData(args);
     termAsync->start(termCb);
     termAsync->send();
-    while (!confirmer.load())
-        this_thread::sleep_for(chrono::milliseconds(10));
-    delete hub;
 }
 
 // *** START ***
@@ -135,6 +145,7 @@ void MessageServer::serverThreadFunction(uint16_t port)
     _serverHub->listen(port);
     _serverHub->run();
     _serverThreadTerminated.store(true);
+    delete _serverHub;
     log("Server thread terminated");
 }
 
@@ -146,6 +157,7 @@ void MessageServer::webServerThreadFunction(uint16_t port)
     _webServerHub->listen(port);
     _webServerHub->run();
     _webServerThreadTerminated.store(true);
+    delete _webServerHub;
     log("Web server thread terminated");
 }
 
@@ -157,6 +169,7 @@ void MessageServer::clientThreadFunction(uint16_t port)
     _clientHub->listen(port);
     _clientHub->run();
     _clientThreadTerminated.store(true);
+    delete _clientHub;
     log("Client thread terminated");
 }
 

@@ -86,7 +86,7 @@ private:
     void sendObjects(uWS::WebSocket<uWS::SERVER>* socket);
     bool ptreeFromString(const std::string& s, boost::property_tree::ptree& output) const;
     void stringFromPtree(const boost::property_tree::ptree& pt, std::string& output) const;
-    void terminateHub(uWS::Hub* hub, const std::atomic<bool>& confirmer);
+    void terminateHub(uWS::Hub* hub, int i);
     void init();
     void restart();
 };
