@@ -133,9 +133,9 @@ void MessageServer::logThreadFunction()
         _logMutex.unlock();
         if (_threadTerminated[server].load() && _threadTerminated[webServer].load() && _threadTerminated[client].load())
         {
-            _logThreadTeminated.store(true);
             log("Log thread terminated");
             printLogDeq();
+            _logThreadTeminated.store(true);
             break;
         }
     }
@@ -150,7 +150,7 @@ void MessageServer::serverThreadFunction(uint16_t port)
     _hub[server]->listen(port);
     _hub[server]->run();
     _threadTerminated[server].store(true);
-    delete _hub[server]->getDefaultGroup<SERVER>().getUserData();
+    free(_hub[server]->getDefaultGroup<SERVER>().getUserData());
     delete _hub[server];
     log("Server thread terminated");
 }
@@ -164,7 +164,7 @@ void MessageServer::webServerThreadFunction(uint16_t port)
     _hub[webServer]->listen(port);
     _hub[webServer]->run();
     _threadTerminated[webServer].store(true);
-    delete _hub[webServer]->getDefaultGroup<SERVER>().getUserData();
+    free(_hub[webServer]->getDefaultGroup<SERVER>().getUserData());
     delete _hub[webServer];
     log("Web server thread terminated");
 }
@@ -175,16 +175,17 @@ void MessageServer::clientThreadFunction(uint16_t port)
     _hub[client] = new Hub();
     _clientGroup.push_back(&_hub[client]->getDefaultGroup<SERVER>());
     setGroupData(_clientGroup[0], client);
-    for (int i = 0; i < FREE_THREADS; ++i)
+    for (int i = 1; i <= FREE_THREADS; ++i)
     {
         _clientGroup.push_back(_hub[client]->createGroup<SERVER>());
-        setGroupData(_clientGroup[i + 1], client);
+        setGroupData(_clientGroup[i], client);
     }
     setClientCallbacks();
     _hub[client]->listen(port);
     _hub[client]->run();
     _threadTerminated[client].store(true);
-    delete _hub[client]->getDefaultGroup<SERVER>().getUserData();
+    for (unsigned i = 0; i < _clientGroup.size(); ++i)
+        free(_clientGroup[i]->getUserData());
     delete _hub[client];
     log("Client thread terminated");
 }
