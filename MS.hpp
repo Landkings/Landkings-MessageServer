@@ -113,11 +113,11 @@ private:
     void setWebServerCallbacks();
     void setClientCallbacks();
 
-    SInMessageType getServerMessageType(boost::property_tree::ptree& message) const;
-    void processServerMessage(uWS::WebSocket<uWS::SERVER>* socket, boost::property_tree::ptree& message);
-    void processServerLoadMap(uWS::WebSocket<uWS::SERVER>* socket, boost::property_tree::ptree& message);
-    void processServerLoadObjects(uWS::WebSocket<uWS::SERVER>* socket, boost::property_tree::ptree& message);
-    void processServerUnknown(uWS::WebSocket<uWS::SERVER>* socket, boost::property_tree::ptree& message);
+    SInMessageType getServerMessageType(const boost::property_tree::ptree& message) const;
+    void processServerMessage(uWS::WebSocket<uWS::SERVER>* socket, const boost::property_tree::ptree& message);
+    void processServerLoadMap(uWS::WebSocket<uWS::SERVER>* socket, const boost::property_tree::ptree& message);
+    void processServerLoadObjects(uWS::WebSocket<uWS::SERVER>* socket, const boost::property_tree::ptree& message);
+    void processServerUnknown(uWS::WebSocket<uWS::SERVER>* socket, const boost::property_tree::ptree& message);
 
     // *** FUNCTIONS ***
     void sendAcceptConnection();
@@ -125,11 +125,10 @@ private:
     void socketSend(uWS::WebSocket<uWS::SERVER>* socket, const boost::property_tree::ptree& message);
     void sendMap(uWS::WebSocket<uWS::SERVER>* socket);
     void sendObjects(uWS::WebSocket<uWS::SERVER>* socket);
-    bool ptreeFromString(const std::string& s, boost::property_tree::ptree& output) const;
-    void stringFromPtree(const boost::property_tree::ptree& pt, std::string& output) const;
-    void waitBool(const std::atomic<bool>& a, bool val, std::chrono::milliseconds interval = std::chrono::milliseconds(10));
+    static bool ptreeFromString(const std::string& s, boost::property_tree::ptree& output);
+    static void stringFromPtree(const boost::property_tree::ptree& pt, std::string& output);
     template<typename T>
-    void customSleep(unsigned val)
+    static void customSleep(unsigned val)
     {
         std::this_thread::sleep_for(std::chrono::duration<int64_t, T>(val));
     }

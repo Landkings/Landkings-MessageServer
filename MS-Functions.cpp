@@ -34,13 +34,7 @@ void MessageServer::socketSend(WebSocket<SERVER>* socket, const ptree& message)
     socket->send(s.data(), s.length(), TEXT);
 }
 
-void MessageServer::waitBool(const atomic<bool>& a, bool val, chrono::milliseconds interval)
-{
-    while (a.load() != val)
-        this_thread::sleep_for(interval);
-}
-
-bool MessageServer::ptreeFromString(const string& s, ptree& output) const
+bool MessageServer::ptreeFromString(const string& s, ptree& output)
 {
     stringstream ss;
     ss << s;
@@ -55,7 +49,7 @@ bool MessageServer::ptreeFromString(const string& s, ptree& output) const
     return true;
 }
 
-void MessageServer::stringFromPtree(const ptree& pt, string& output) const
+void MessageServer::stringFromPtree(const ptree& pt, string& output)
 {
     stringstream ss;
     json_parser::write_json(ss, pt);

@@ -27,7 +27,7 @@ void MessageServer::terminate()
     if (_logThreadTeminated)
         return;
     while (!_started.load())
-        this_thread::sleep_for(chrono::nanoseconds(1));
+        customSleep<nano>(1);
     log("Termination");
     vector<atomic<bool>> callbacksStoped(_hub.size());
     for (unsigned i = 0; i < HUBS; ++i)
@@ -35,7 +35,7 @@ void MessageServer::terminate()
     for (unsigned i = 0; i < HUBS; ++i)
         terminateHub(i, callbacksStoped.data());
     while (!_logThreadTeminated.load())
-        this_thread::sleep_for(chrono::milliseconds(10));
+        customSleep<nano>(1);
     _log.close();
 }
 
@@ -106,13 +106,12 @@ void MessageServer::start(uint16_t serverPort, uint16_t webServerPort, uint16_t 
     _port[webServer] = webServerPort;
     init();
     thread(&MessageServer::logThreadFunction, this).detach();
-    this_thread::sleep_for(chrono::milliseconds(10));
     thread(&MessageServer::clientThreadFunction, this, clientPort).detach();
-    this_thread::sleep_for(chrono::milliseconds(500));
+    customSleep<milli>(500);
     thread(&MessageServer::serverThreadFunction, this, serverPort).detach();
-    this_thread::sleep_for(chrono::milliseconds(500));
+    customSleep<milli>(500);
     thread(&MessageServer::webServerThreadFunction, this, webServerPort).detach();
-    this_thread::sleep_for(chrono::milliseconds(500));
+    customSleep<milli>(500);
     _started.store(true);
 }
 
@@ -127,9 +126,9 @@ void MessageServer::logThreadFunction()
     log("Log thread running");
     while (true)
     {
-        this_thread::sleep_for(chrono::milliseconds(400));
+        customSleep<milli>(400);
         while (!_logMutex.try_lock())
-            this_thread::sleep_for(chrono::nanoseconds(1));
+            customSleep<nano>(1);
         printLogDeq();
         _logMutex.unlock();
         if (_threadTerminated[server].load() && _threadTerminated[webServer].load() && _threadTerminated[client].load())
@@ -225,7 +224,7 @@ void MessageServer::log(string msg)
            << ')';
     buffer << ' ' << msg << '\n';
     while (!_logMutex.try_lock())
-        this_thread::sleep_for(chrono::nanoseconds(1));
+        customSleep<nano>(1);
     _logDeq.push_back(buffer.str());
     _logMutex.unlock();
 }

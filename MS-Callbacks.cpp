@@ -126,7 +126,7 @@ void MessageServer::onClientDisconnection(uWS::WebSocket<uWS::SERVER>* socket, i
 
 // *** SERVER MESSAGE ***
 
-MessageServer::SInMessageType MessageServer::getServerMessageType(ptree& message) const
+MessageServer::SInMessageType MessageServer::getServerMessageType(const ptree& message) const
 {
     string messageType;
     try
@@ -144,7 +144,7 @@ MessageServer::SInMessageType MessageServer::getServerMessageType(ptree& message
     return SInMessageType::unknown;
 }
 
-void MessageServer::processServerMessage(uWS::WebSocket<SERVER>* socket, ptree& message)
+void MessageServer::processServerMessage(uWS::WebSocket<SERVER>* socket, const ptree& message)
 {
     SInMessageType type = getServerMessageType(message);
     switch (type)
@@ -161,7 +161,7 @@ void MessageServer::processServerMessage(uWS::WebSocket<SERVER>* socket, ptree& 
     }
 }
 
-void MessageServer::processServerLoadMap(uWS::WebSocket<SERVER>* socket, ptree& message)
+void MessageServer::processServerLoadMap(uWS::WebSocket<SERVER>* socket, const ptree& message)
 {
     _ss.store(SWork::loadMap);
     stringFromPtree(message, _loadedMap);
@@ -170,14 +170,14 @@ void MessageServer::processServerLoadMap(uWS::WebSocket<SERVER>* socket, ptree& 
     _ss.store(SWork::nothing);
 }
 
-void MessageServer::processServerLoadObjects(uWS::WebSocket<SERVER>* socket, ptree& message)
+void MessageServer::processServerLoadObjects(uWS::WebSocket<SERVER>* socket, const ptree& message)
 {
     _ss.store(SWork::loadObjects);
     string s;
     stringFromPtree(message, s);
     _loadedObjects = s;
     log("Objects loaded");
-    vector<atomic<bool>> broadcasted(_clientGroup.size() - 1);
+    vector<atomic<bool>> broadcasted(_clientGroup.size());
     for (unsigned i = 1; i < _clientGroup.size(); ++i)
     {
         broadcasted[i].store(false);
@@ -189,12 +189,12 @@ void MessageServer::processServerLoadObjects(uWS::WebSocket<SERVER>* socket, ptr
     }
     _hub[client]->getDefaultGroup<SERVER>().broadcast(_loadedObjects.data(), _loadedObjects.length(), TEXT);
     for (unsigned i = 1; i < _clientGroup.size(); ++i)
-        if (!broadcasted[i - 1].load())
+        if (!broadcasted[i].load())
             i = 0;
     _ss.store(SWork::nothing);
 }
 
-void MessageServer::processServerUnknown(uWS::WebSocket<SERVER>* socket, ptree& message)
+void MessageServer::processServerUnknown(uWS::WebSocket<SERVER>* socket, const ptree& message)
 {
     log("Unknown server message");
 }
