@@ -4,11 +4,11 @@
 #include <atomic>
 #include <deque>
 #include <unordered_set>
+#include <thread>
 
 #include <uWS/uWS.h>
 
 #include <boost/property_tree/ptree.hpp>
-
 
 class MessageServer
 {
@@ -18,14 +18,51 @@ public:
     void start(uint16_t serverPort, uint16_t webServerPort, uint16_t clientPort);
     void terminate();
 private:
+    enum class CloseCode
+    {
+        mapNotReceived = 4001, duplicatedConnection, termination
+    };
+
     enum class SInMessageType
     {
         unknown = -1, loadMap, loadObjects
     };
 
-    uWS::Hub* _serverHub;
-    uWS::Hub* _webServerHub;
-    uWS::Hub* _clientHub;
+    enum class SWork
+    {
+        nothing, connection, disconnection, loadObjects, loadMap
+    };
+
+    enum class CWork
+    {
+        nothing, connection, disconnection
+    };
+
+    enum class WWork
+    {
+        nothing, request
+    };
+
+    enum HubID
+    {
+        server = 0, webServer, client
+    };
+
+    static constexpr int HUBS = 3;
+    static const int FREE_THREADS;
+
+    //********************************************************
+
+    std::vector<uWS::Hub*> _hub;
+    std::vector<std::atomic<bool>> _threadTerminated;
+    std::vector<uint16_t> _port;
+
+    std::vector<uWS::Group<uWS::SERVER>*> _clientGroup;
+
+    std::atomic<SWork> _ss;
+    std::atomic<CWork> _cs;
+    std::atomic<WWork> _ws;
+
     uWS::WebSocket<uWS::SERVER>* _serverSocket;
     std::unordered_set<uWS::WebSocket<uWS::SERVER>*> _clientSocket;
     std::unordered_set<std::string> _clientIp;
@@ -42,23 +79,26 @@ private:
 
     std::atomic<bool> _started;
     std::atomic<bool> _logThreadTeminated;
-    std::atomic<bool> _serverThreadTerminated;
-    std::atomic<bool> _webServerThreadTerminated;
-    std::atomic<bool> _clientThreadTerminated;
 
-    uint16_t _serverPort;
-    uint16_t _webServerPort;
-    uint16_t _clientPort;
-
+    // *** CORE ***
     void logThreadFunction();
     void serverThreadFunction(uint16_t port);
     void webServerThreadFunction(uint16_t port);
     void clientThreadFunction(uint16_t port);
+    void setGroupData(uWS::Group<uWS::SERVER>* g, int i);
+    template<class T>
+    static void putToVoid(void* base, T val, int offset = 0);
+    template<class T>
+    static T getFromVoid(void* base, int offset = 0);
 
-    void setServerCallbacks();
-    void setWebServerCallbacks();
-    void setClientCallbacks();
+    void terminateHub(int i, std::atomic<bool>* callbacksStoped);
+    void init();
+    void restart();
 
+    void log(std::string msg);
+    void printLogDeq();
+
+    // *** CALLBACKS ***
     void onServerConnection(uWS::WebSocket<uWS::SERVER>* socket, uWS::HttpRequest request);
     void onServerDisconnetion(uWS::WebSocket<uWS::SERVER>* socket, int code, char* message, size_t length);
     void onServerMessage(uWS::WebSocket<uWS::SERVER>* socket, char* message, size_t length, uWS::OpCode opCode);
@@ -69,8 +109,9 @@ private:
     void onClientConnection(uWS::WebSocket<uWS::SERVER>* socket, uWS::HttpRequest request);
     void onClientDisconnection(uWS::WebSocket<uWS::SERVER>* socket, int code, char* message, size_t length);
 
-    void log(std::string msg);
-    void printLogDeq();
+    void setServerCallbacks();
+    void setWebServerCallbacks();
+    void setClientCallbacks();
 
     SInMessageType getServerMessageType(boost::property_tree::ptree& message) const;
     void processServerMessage(uWS::WebSocket<uWS::SERVER>* socket, boost::property_tree::ptree& message);
@@ -78,7 +119,7 @@ private:
     void processServerLoadObjects(uWS::WebSocket<uWS::SERVER>* socket, boost::property_tree::ptree& message);
     void processServerUnknown(uWS::WebSocket<uWS::SERVER>* socket, boost::property_tree::ptree& message);
 
-    //*************************
+    // *** FUNCTIONS ***
     void sendAcceptConnection();
     void socketSend(uWS::WebSocket<uWS::SERVER>* socket, const std::string& message);
     void socketSend(uWS::WebSocket<uWS::SERVER>* socket, const boost::property_tree::ptree& message);
@@ -86,7 +127,10 @@ private:
     void sendObjects(uWS::WebSocket<uWS::SERVER>* socket);
     bool ptreeFromString(const std::string& s, boost::property_tree::ptree& output) const;
     void stringFromPtree(const boost::property_tree::ptree& pt, std::string& output) const;
-    void terminateHub(uWS::Hub* hub, int i);
-    void init();
-    void restart();
+    void waitBool(const std::atomic<bool>& a, bool val, std::chrono::milliseconds interval = std::chrono::milliseconds(10));
+    template<typename T>
+    void customSleep(unsigned val)
+    {
+        std::this_thread::sleep_for(std::chrono::duration<int64_t, T>(val));
+    }
 };

@@ -3,7 +3,7 @@
 
 #include <boost/program_options.hpp>
 
-#include "MessageServer.h"
+#include "MS.hpp"
 
 using namespace std;
 using namespace boost::program_options;
@@ -11,6 +11,7 @@ using namespace boost::program_options;
 
 int main(int argc, char** argv)
 {
+    srand(clock());
     options_description desc;
     vector<int> usePort(3);
     int time;
