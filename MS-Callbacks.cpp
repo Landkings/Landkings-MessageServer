@@ -32,7 +32,7 @@ void MessageServer::onServerDisconnetion(uWS::WebSocket<uWS::SERVER>* socket, in
 {
     if (socket != _serverSocket)
         return;
-    log("Server disconneted");
+    log("Server disconneted: code = " + to_string(code));
     _serverConnected.store(false);
     _mapReceived.store(false);
     _serverSocket = nullptr;
@@ -43,7 +43,7 @@ void MessageServer::onServerMessage(uWS::WebSocket<uWS::SERVER>* socket, char* m
     ptree pt;
     if (!ptreeFromString(string(message).substr(0, length), pt))
     {
-        log("Receive FROM SERVER invalid JSON");
+        log("Invalid server message");
         return;
     }
     processServerMessage(socket, pt);
@@ -55,13 +55,13 @@ void MessageServer::onWebServerHttpRequest(HttpResponse* response, HttpRequest r
 {
     const static string httpErrStr("HTTP/1.1 500 Internal Server Error");
     const static string httpOkStr("HTTP/1.1 200 OK");
-    _ws.store(WWork::request);
+    _ww.store(WWork::request);
     // TODO: check web server
     if (!_serverConnected.load())
     {
         response->write(httpErrStr.data(), httpErrStr.length());
         response->end();
-        _ws.store(WWork::nothing);
+        _ww.store(WWork::nothing);
         return;
     }
     response->write(httpOkStr.data(), httpOkStr.length());
@@ -70,7 +70,7 @@ void MessageServer::onWebServerHttpRequest(HttpResponse* response, HttpRequest r
     if (!nickHeader.key) // TODO: del
     {
         log("http request, nick header -");
-        _ws.store(WWork::nothing);
+        _ww.store(WWork::nothing);
         return;
     }
     ptree pt;
@@ -78,7 +78,7 @@ void MessageServer::onWebServerHttpRequest(HttpResponse* response, HttpRequest r
     pt.put<string>("nickname", string(nickHeader.value, nickHeader.valueLength));
     pt.put<string>("sourceCode", string(data, length));
     socketSend(_serverSocket, pt);
-    _ws.store(WWork::nothing);
+    _ww.store(WWork::nothing);
 }
 
 // *** CLIENT CALLBACKS ***
@@ -87,41 +87,41 @@ void MessageServer::onWebServerHttpRequest(HttpResponse* response, HttpRequest r
 
 void MessageServer::onClientConnection(uWS::WebSocket<uWS::SERVER>* socket, uWS::HttpRequest request)
 {
-    _cs.store(CWork::connection);
+    _cw.store(CWork::connection);
     if (_clientIp.find(socket->getAddress().address) != _clientIp.end())
     {
         socket->close(static_cast<int>(CloseCode::duplicatedConnection));
-        _cs.store(CWork::nothing);
+        _cw.store(CWork::nothing);
         return;
     }
     int transferGroupId = rand() % _clientGroup.size();
-    if (transferGroupId != 0) // if 0 -> default group
+    if (transferGroupId != 0)
         socket->transfer(_clientGroup[transferGroupId]);
     _clientIp.insert(socket->getAddress().address);
     _clientSocket.insert(socket);
     if (!_mapReceived.load())
     {
         socket->close(static_cast<int>(CloseCode::mapNotReceived));
-        _cs.store(CWork::nothing);
+        _cw.store(CWork::nothing);
         return;
     }
-    log(string("Client + : group = ") + to_string(transferGroupId) + " address = " + socket->getAddress().family + socket->getAddress().address);
+    log(string("Client connected: group = ") + to_string(transferGroupId) + " address = " + socket->getAddress().family + socket->getAddress().address);
     sendMap(socket);
-    _cs.store(CWork::nothing);
+    _cw.store(CWork::nothing);
 }
 
 void MessageServer::onClientDisconnection(uWS::WebSocket<uWS::SERVER>* socket, int code, char* message, size_t length)
 {
-    _cs.store(CWork::disconnection);
+    _cw.store(CWork::disconnection);
     if (_clientSocket.find(socket) != _clientSocket.end())
     {
-        log(string("Client - : code = ") + to_string(code) + " address = " + socket->getAddress().family + socket->getAddress().address);
+        log(string("Client disconnected: code = ") + to_string(code) + " address = " + socket->getAddress().family + socket->getAddress().address);
         _clientSocket.erase(socket);
         _clientIp.erase(socket->getAddress().address);
     }
     else
-        log(string("Decline client connection : code = " + to_string(code)));
-    _cs.store(CWork::nothing);
+        log(string("Decline client connection: code = " + to_string(code)));
+    _cw.store(CWork::nothing);
 }
 
 // *** SERVER MESSAGE ***
@@ -163,16 +163,16 @@ void MessageServer::processServerMessage(uWS::WebSocket<SERVER>* socket, const p
 
 void MessageServer::processServerLoadMap(uWS::WebSocket<SERVER>* socket, const ptree& message)
 {
-    _ss.store(SWork::loadMap);
+    _sw.store(SWork::loadMap);
     stringFromPtree(message, _loadedMap);
     _mapReceived.store(true);
     log("Map loaded");
-    _ss.store(SWork::nothing);
+    _sw.store(SWork::nothing);
 }
 
 void MessageServer::processServerLoadObjects(uWS::WebSocket<SERVER>* socket, const ptree& message)
 {
-    _ss.store(SWork::loadObjects);
+    _sw.store(SWork::loadObjects);
     string s;
     stringFromPtree(message, s);
     _loadedObjects = s;
@@ -191,7 +191,7 @@ void MessageServer::processServerLoadObjects(uWS::WebSocket<SERVER>* socket, con
     for (unsigned i = 1; i < _clientGroup.size(); ++i)
         if (!broadcasted[i].load())
             i = 0;
-    _ss.store(SWork::nothing);
+    _sw.store(SWork::nothing);
 }
 
 void MessageServer::processServerUnknown(uWS::WebSocket<SERVER>* socket, const ptree& message)

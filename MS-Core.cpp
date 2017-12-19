@@ -94,17 +94,19 @@ void MessageServer::init()
     _clientIp.clear();
     _clientSocket.clear();
     _clientGroup.clear();
-    _ss = SWork::nothing;
-    _ws = WWork::nothing;
-    _cs = CWork::nothing;
+    _sw = SWork::nothing;
+    _ww = WWork::nothing;
+    _cw = CWork::nothing;
+    _outTraffic = 0;
 }
 
 void MessageServer::start(uint16_t serverPort, uint16_t webServerPort, uint16_t clientPort)
 {
+    init();
+    _startPoint = chrono::time_point_cast<chrono::seconds>(chrono::system_clock::now());
     _port[client] = clientPort;
     _port[server] = serverPort;
     _port[webServer] = webServerPort;
-    init();
     thread(&MessageServer::logThreadFunction, this).detach();
     thread(&MessageServer::clientThreadFunction, this, clientPort).detach();
     customSleep<milli>(500);
@@ -126,13 +128,14 @@ void MessageServer::logThreadFunction()
     log("Log thread running");
     while (true)
     {
-        customSleep<milli>(400);
+        customSleep<milli>(LOG_INTERVAL);
         while (!_logMutex.try_lock())
             customSleep<nano>(1);
         printLogDeq();
         _logMutex.unlock();
         if (_threadTerminated[server].load() && _threadTerminated[webServer].load() && _threadTerminated[client].load())
         {
+            lastLog();
             log("Log thread terminated");
             printLogDeq();
             _logThreadTeminated.store(true);
@@ -240,4 +243,14 @@ void MessageServer::printLogDeq()
     }
     cout.flush();
     _log.flush();
+}
+
+void MessageServer::lastLog()
+{
+    int64_t uptime = (chrono::time_point_cast<chrono::seconds>(chrono::system_clock::now()) - _startPoint).count();
+    log(string("Uptime: ") + to_string(uptime) + " seconds");
+    log(string("Out traffic: " + to_string(_outTraffic)) + " bytes");
+    if (uptime == 0)
+        return;
+    log(string("Out traffic per second: " + to_string(_outTraffic / uptime)) + " bytes");
 }

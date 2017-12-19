@@ -24,6 +24,7 @@ void MessageServer::sendObjects(WebSocket<SERVER>* socket)
 
 void MessageServer::socketSend(WebSocket<SERVER>* socket, const string& message)
 {
+    _outTraffic += message.length();
     socket->send(message.data(), message.length(), TEXT);
 }
 
@@ -31,6 +32,7 @@ void MessageServer::socketSend(WebSocket<SERVER>* socket, const ptree& message)
 {
     string s;
     stringFromPtree(message, s);
+    _outTraffic += s.length();
     socket->send(s.data(), s.length(), TEXT);
 }
 

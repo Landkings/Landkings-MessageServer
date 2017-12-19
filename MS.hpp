@@ -5,6 +5,7 @@
 #include <deque>
 #include <unordered_set>
 #include <thread>
+#include <chrono>
 
 #include <uWS/uWS.h>
 
@@ -49,6 +50,7 @@ private:
     };
 
     static constexpr int HUBS = 3;
+    static constexpr int LOG_INTERVAL = 500; // ms
     static const int FREE_THREADS;
 
     //********************************************************
@@ -59,9 +61,9 @@ private:
 
     std::vector<uWS::Group<uWS::SERVER>*> _clientGroup;
 
-    std::atomic<SWork> _ss;
-    std::atomic<CWork> _cs;
-    std::atomic<WWork> _ws;
+    std::atomic<SWork> _sw;
+    std::atomic<CWork> _cw;
+    std::atomic<WWork> _ww;
 
     uWS::WebSocket<uWS::SERVER>* _serverSocket;
     std::unordered_set<uWS::WebSocket<uWS::SERVER>*> _clientSocket;
@@ -79,6 +81,9 @@ private:
 
     std::atomic<bool> _started;
     std::atomic<bool> _logThreadTeminated;
+
+    std::chrono::time_point<std::chrono::system_clock, std::chrono::seconds> _startPoint;
+    unsigned long _outTraffic;
 
     // *** CORE ***
     void logThreadFunction();
@@ -125,6 +130,7 @@ private:
     void socketSend(uWS::WebSocket<uWS::SERVER>* socket, const boost::property_tree::ptree& message);
     void sendMap(uWS::WebSocket<uWS::SERVER>* socket);
     void sendObjects(uWS::WebSocket<uWS::SERVER>* socket);
+    void lastLog();
     static bool ptreeFromString(const std::string& s, boost::property_tree::ptree& output);
     static void stringFromPtree(const boost::property_tree::ptree& pt, std::string& output);
     template<typename T>
