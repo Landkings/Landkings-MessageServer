@@ -4,7 +4,7 @@
 
 using namespace std;
 using namespace uWS;
-using namespace boost::property_tree;
+using namespace rapidjson;
 
 
 // *** SERVER CALLBACKS ***
@@ -40,13 +40,14 @@ void MessageServer::onServerDisconnetion(uWS::WebSocket<uWS::SERVER>* socket, in
 
 void MessageServer::onServerMessage(uWS::WebSocket<uWS::SERVER>* socket, char* message, size_t length, uWS::OpCode opCode)
 {
-    ptree pt;
-    if (!ptreeFromString(string(message).substr(0, length), pt))
+    Document doc;
+    doc.Parse(message, length);
+    if (!doc.IsObject())
     {
-        log("Invalid server message");
+        log("Invalid server JSON");
         return;
     }
-    processServerMessage(socket, pt);
+    processServerMessage(socket, doc);
 }
 
 // *** WEB SERVER CALLBACKS ***
@@ -73,17 +74,21 @@ void MessageServer::onWebServerHttpRequest(HttpResponse* response, HttpRequest r
         _ww.store(WWork::nothing);
         return;
     }
-    ptree pt;
-    pt.put<string>("messageType", "newPlayer");
-    pt.put<string>("nickname", string(nickHeader.value, nickHeader.valueLength));
-    pt.put<string>("sourceCode", string(data, length));
-    socketSend(_serverSocket, pt);
+    Document doc;
+    doc.SetObject();
+    Document::AllocatorType& allc = doc.GetAllocator();
+    Value val(kStringType);
+    val.SetString("newPlayer");
+    doc.AddMember("messageType", val, allc);
+    val.SetString(nickHeader.value, nickHeader.valueLength);
+    doc.AddMember("nickname", val, allc);
+    val.SetString(data, length);
+    doc.AddMember("sourceCode", val, allc);
+    socketSend(_serverSocket, doc);
     _ww.store(WWork::nothing);
 }
 
 // *** CLIENT CALLBACKS ***
-
-// TODO: terminate all client groups
 
 void MessageServer::onClientConnection(uWS::WebSocket<uWS::SERVER>* socket, uWS::HttpRequest request)
 {
@@ -126,17 +131,12 @@ void MessageServer::onClientDisconnection(uWS::WebSocket<uWS::SERVER>* socket, i
 
 // *** SERVER MESSAGE ***
 
-MessageServer::SInMessageType MessageServer::getServerMessageType(const ptree& message) const
+MessageServer::SInMessageType MessageServer::getServerMessageType(const rapidjson::Document& doc) const
 {
-    string messageType;
-    try
-    {
-        messageType = message.get<string>("messageType");
-    }
-    catch (...)
-    {
+    Document::ConstMemberIterator typeIterator = doc.FindMember("messageType");
+    if (typeIterator == doc.MemberEnd())
         return SInMessageType::unknown;
-    }
+    string messageType = typeIterator->value.GetString();
     if (messageType == "loadMap")
         return SInMessageType::loadMap;
     if (messageType == "loadObjects")
@@ -144,38 +144,40 @@ MessageServer::SInMessageType MessageServer::getServerMessageType(const ptree& m
     return SInMessageType::unknown;
 }
 
-void MessageServer::processServerMessage(uWS::WebSocket<SERVER>* socket, const ptree& message)
+void MessageServer::processServerMessage(uWS::WebSocket<SERVER>* socket, const Document& doc)
 {
-    SInMessageType type = getServerMessageType(message);
+    SInMessageType type = getServerMessageType(doc);
     switch (type)
     {
         case SInMessageType::loadMap:
-            processServerLoadMap(socket, message);
+            processServerLoadMap(socket, doc);
             return;
         case SInMessageType::loadObjects:
-            processServerLoadObjects(socket, message);
+            processServerLoadObjects(socket, doc);
             return;
         case SInMessageType::unknown:
-            processServerUnknown(socket, message);
+            processServerUnknown(socket, doc);
             return;
     }
 }
 
-void MessageServer::processServerLoadMap(uWS::WebSocket<SERVER>* socket, const ptree& message)
+void MessageServer::processServerLoadMap(uWS::WebSocket<SERVER>* socket, const Document& doc)
 {
     _sw.store(SWork::loadMap);
-    stringFromPtree(message, _loadedMap);
+    StringBuffer buffer;
+    docBuffer(doc, buffer);
+    _loadedMap.assign(buffer.GetString(), buffer.GetLength());
     _mapReceived.store(true);
     log("Map loaded");
     _sw.store(SWork::nothing);
 }
 
-void MessageServer::processServerLoadObjects(uWS::WebSocket<SERVER>* socket, const ptree& message)
+void MessageServer::processServerLoadObjects(uWS::WebSocket<SERVER>* socket, const Document& doc)
 {
     _sw.store(SWork::loadObjects);
-    string s;
-    stringFromPtree(message, s);
-    _loadedObjects = s;
+    StringBuffer buffer;
+    docBuffer(doc, buffer);
+    _loadedObjects.assign(buffer.GetString(), buffer.GetLength());
     log("Objects loaded");
     vector<atomic<bool>> broadcasted(_clientGroup.size());
     for (unsigned i = 1; i < _clientGroup.size(); ++i)
@@ -194,7 +196,7 @@ void MessageServer::processServerLoadObjects(uWS::WebSocket<SERVER>* socket, con
     _sw.store(SWork::nothing);
 }
 
-void MessageServer::processServerUnknown(uWS::WebSocket<SERVER>* socket, const ptree& message)
+void MessageServer::processServerUnknown(uWS::WebSocket<SERVER>* socket, const Document& doc)
 {
     log("Unknown server message");
 }

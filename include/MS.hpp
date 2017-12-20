@@ -9,7 +9,8 @@
 
 #include <uWS/uWS.h>
 
-#include <boost/property_tree/ptree.hpp>
+#include "rapidjson/document.h"
+#include "rapidjson/stringbuffer.h"
 
 class MessageServer
 {
@@ -118,21 +119,20 @@ private:
     void setWebServerCallbacks();
     void setClientCallbacks();
 
-    SInMessageType getServerMessageType(const boost::property_tree::ptree& message) const;
-    void processServerMessage(uWS::WebSocket<uWS::SERVER>* socket, const boost::property_tree::ptree& message);
-    void processServerLoadMap(uWS::WebSocket<uWS::SERVER>* socket, const boost::property_tree::ptree& message);
-    void processServerLoadObjects(uWS::WebSocket<uWS::SERVER>* socket, const boost::property_tree::ptree& message);
-    void processServerUnknown(uWS::WebSocket<uWS::SERVER>* socket, const boost::property_tree::ptree& message);
+    SInMessageType getServerMessageType(const rapidjson::Document& doc) const;
+    void processServerMessage(uWS::WebSocket<uWS::SERVER>* socket, const rapidjson::Document& doc);
+    void processServerLoadMap(uWS::WebSocket<uWS::SERVER>* socket, const rapidjson::Document& doc);
+    void processServerLoadObjects(uWS::WebSocket<uWS::SERVER>* socket, const rapidjson::Document& doc);
+    void processServerUnknown(uWS::WebSocket<uWS::SERVER>* socket, const rapidjson::Document& doc);
 
     // *** FUNCTIONS ***
     void sendAcceptConnection();
     void socketSend(uWS::WebSocket<uWS::SERVER>* socket, const std::string& message);
-    void socketSend(uWS::WebSocket<uWS::SERVER>* socket, const boost::property_tree::ptree& message);
+    void socketSend(uWS::WebSocket<uWS::SERVER>* socket, const rapidjson::Document& doc);
     void sendMap(uWS::WebSocket<uWS::SERVER>* socket);
     void sendObjects(uWS::WebSocket<uWS::SERVER>* socket);
+    static const char* docBuffer(const rapidjson::Document& doc, rapidjson::StringBuffer& buffer);
     void lastLog();
-    static bool ptreeFromString(const std::string& s, boost::property_tree::ptree& output);
-    static void stringFromPtree(const boost::property_tree::ptree& pt, std::string& output);
     template<typename T>
     static void customSleep(unsigned val)
     {

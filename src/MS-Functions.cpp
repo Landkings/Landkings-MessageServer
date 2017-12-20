@@ -1,10 +1,11 @@
 #include "MS.hpp"
 
-#include <boost/property_tree/json_parser.hpp>
+#include "rapidjson/stringbuffer.h"
+#include "rapidjson/writer.h"
 
 using namespace std;
 using namespace uWS;
-using namespace boost::property_tree;
+using namespace rapidjson;
 
 
 void MessageServer::sendAcceptConnection()
@@ -28,34 +29,19 @@ void MessageServer::socketSend(WebSocket<SERVER>* socket, const string& message)
     socket->send(message.data(), message.length(), TEXT);
 }
 
-void MessageServer::socketSend(WebSocket<SERVER>* socket, const ptree& message)
+void MessageServer::socketSend(WebSocket<SERVER>* socket, const Document& doc)
 {
-    string s;
-    stringFromPtree(message, s);
-    _outTraffic += s.length();
-    socket->send(s.data(), s.length(), TEXT);
+    StringBuffer buffer;
+    docBuffer(doc, buffer);
+    _outTraffic += buffer.GetLength();
+    socket->send(buffer.GetString(), buffer.GetLength(), TEXT);
 }
 
-bool MessageServer::ptreeFromString(const string& s, ptree& output)
+const char* MessageServer::docBuffer(const Document& doc, StringBuffer& buffer)
 {
-    stringstream ss;
-    ss << s;
-    try
-    {
-        json_parser::read_json(ss, output);
-    }
-    catch (...)
-    {
-        return false;
-    }
-    return true;
-}
-
-void MessageServer::stringFromPtree(const ptree& pt, string& output)
-{
-    stringstream ss;
-    json_parser::write_json(ss, pt);
-    output = ss.str();
+    Writer<StringBuffer> writer(buffer);
+    doc.Accept(writer);
+    return buffer.GetString();
 }
 
 void MessageServer::setServerCallbacks()

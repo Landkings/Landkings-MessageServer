@@ -5,7 +5,6 @@
 
 using namespace std;
 using namespace uWS;
-using namespace boost::property_tree;
 
 
 const int MessageServer::FREE_THREADS = std::thread::hardware_concurrency() - 5 <= 0 ? 0 : std::thread::hardware_concurrency() - 5;

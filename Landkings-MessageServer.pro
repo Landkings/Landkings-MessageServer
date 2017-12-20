@@ -7,12 +7,10 @@ QMAKE_CXXFLAGS_WARN_ON += -Wno-unused-parameter -Wno-maybe-uninitialized -Wno-po
 
 QMAKE_CXXFLAGS += -DUSE_ASIO
 
-SOURCES += main.cpp \
-    MS-Callbacks.cpp \
-    MS-Functions.cpp \
-    MS-Core.cpp
+INCLUDEPATH += $$PWD/include $$PWD/lib
 
-HEADERS += \
-    MS.hpp
+SOURCES += main.cpp $$PWD/src/*
+
+HEADERS += $$PWD/include/*
 
 LIBS += -luWS -lssl -lpthread -lboost_system -lz -lboost_program_options
