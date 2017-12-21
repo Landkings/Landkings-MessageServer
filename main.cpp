@@ -1,6 +1,8 @@
 #include <iostream>
 #include <thread>
 
+#include <unistd.h>
+
 #include <boost/program_options.hpp>
 
 #include "MS.hpp"
@@ -8,6 +10,23 @@
 using namespace std;
 using namespace boost::program_options;
 
+
+MessageServer* mServerPtr = nullptr;
+
+void sigIntHandler(int)
+{
+    mServerPtr->terminate();
+    cout << "Terminated normally" << endl;
+    exit(0);
+}
+
+void setSigIntHandler()
+{
+    struct sigaction* sigAction = new struct sigaction;
+    sigAction->sa_handler = &sigIntHandler;
+    sigAction->sa_flags = 0;
+    sigaction(SIGINT, sigAction, NULL);
+}
 
 int main(int argc, char** argv)
 {
@@ -60,14 +79,16 @@ int main(int argc, char** argv)
             }
     }
     //*********************
-    MessageServer wsServer;
-    wsServer.start(usePort[0], usePort[1], usePort[2]);
+    MessageServer mServer;
+    mServerPtr = &mServer;
+    setSigIntHandler();
+    mServer.start(usePort[0], usePort[1], usePort[2]);
     if (time >= 0)
         this_thread::sleep_for(chrono::seconds(time));
     else
         while (true)
             this_thread::sleep_for(chrono::seconds(5));
-    wsServer.terminate();
+    mServer.terminate();
     cout << "Terminated normally" << endl;
     return 0;
 }

@@ -101,8 +101,8 @@ void MessageServer::init()
 
 void MessageServer::start(uint16_t serverPort, uint16_t webServerPort, uint16_t clientPort)
 {
-    init();
     _startPoint = chrono::time_point_cast<chrono::seconds>(chrono::system_clock::now());
+    init();
     _port[client] = clientPort;
     _port[server] = serverPort;
     _port[webServer] = webServerPort;

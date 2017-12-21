@@ -9,7 +9,7 @@ using namespace rapidjson;
 
 // *** SERVER CALLBACKS ***
 
-void MessageServer::onServerConnection(uWS::WebSocket<uWS::SERVER>* socket, uWS::HttpRequest request)
+void MessageServer::onServerConnection(WebSocket<SERVER>* socket, HttpRequest request)
 {
     log("Attempt connection as server");
     Header h;
@@ -28,7 +28,7 @@ CloseSocket:
     socket->close();
 }
 
-void MessageServer::onServerDisconnetion(uWS::WebSocket<uWS::SERVER>* socket, int code, char* message, size_t length)
+void MessageServer::onServerDisconnetion(WebSocket<SERVER>* socket, int code, char* message, size_t length)
 {
     if (socket != _serverSocket)
         return;
@@ -38,7 +38,7 @@ void MessageServer::onServerDisconnetion(uWS::WebSocket<uWS::SERVER>* socket, in
     _serverSocket = nullptr;
 }
 
-void MessageServer::onServerMessage(uWS::WebSocket<uWS::SERVER>* socket, char* message, size_t length, uWS::OpCode opCode)
+void MessageServer::onServerMessage(WebSocket<SERVER>* socket, char* message, size_t length, OpCode opCode)
 {
     Document doc;
     doc.Parse(message, length);
@@ -90,7 +90,7 @@ void MessageServer::onWebServerHttpRequest(HttpResponse* response, HttpRequest r
 
 // *** CLIENT CALLBACKS ***
 
-void MessageServer::onClientConnection(uWS::WebSocket<uWS::SERVER>* socket, uWS::HttpRequest request)
+void MessageServer::onClientConnection(WebSocket<SERVER>* socket, HttpRequest request)
 {
     _cw.store(CWork::connection);
     if (_clientIp.find(socket->getAddress().address) != _clientIp.end())
@@ -115,7 +115,7 @@ void MessageServer::onClientConnection(uWS::WebSocket<uWS::SERVER>* socket, uWS:
     _cw.store(CWork::nothing);
 }
 
-void MessageServer::onClientDisconnection(uWS::WebSocket<uWS::SERVER>* socket, int code, char* message, size_t length)
+void MessageServer::onClientDisconnection(WebSocket<SERVER>* socket, int code, char* message, size_t length)
 {
     _cw.store(CWork::disconnection);
     if (_clientSocket.find(socket) != _clientSocket.end())
@@ -131,7 +131,7 @@ void MessageServer::onClientDisconnection(uWS::WebSocket<uWS::SERVER>* socket, i
 
 // *** SERVER MESSAGE ***
 
-MessageServer::SInMessageType MessageServer::getServerMessageType(const rapidjson::Document& doc) const
+MessageServer::SInMessageType MessageServer::getServerMessageType(const Document& doc) const
 {
     Document::ConstMemberIterator typeIterator = doc.FindMember("messageType");
     if (typeIterator == doc.MemberEnd())
@@ -144,7 +144,7 @@ MessageServer::SInMessageType MessageServer::getServerMessageType(const rapidjso
     return SInMessageType::unknown;
 }
 
-void MessageServer::processServerMessage(uWS::WebSocket<SERVER>* socket, const Document& doc)
+void MessageServer::processServerMessage(WebSocket<SERVER>* socket, const Document& doc)
 {
     SInMessageType type = getServerMessageType(doc);
     switch (type)
@@ -161,7 +161,7 @@ void MessageServer::processServerMessage(uWS::WebSocket<SERVER>* socket, const D
     }
 }
 
-void MessageServer::processServerLoadMap(uWS::WebSocket<SERVER>* socket, const Document& doc)
+void MessageServer::processServerLoadMap(WebSocket<SERVER>* socket, const Document& doc)
 {
     _sw.store(SWork::loadMap);
     StringBuffer buffer;
@@ -172,7 +172,7 @@ void MessageServer::processServerLoadMap(uWS::WebSocket<SERVER>* socket, const D
     _sw.store(SWork::nothing);
 }
 
-void MessageServer::processServerLoadObjects(uWS::WebSocket<SERVER>* socket, const Document& doc)
+void MessageServer::processServerLoadObjects(WebSocket<SERVER>* socket, const Document& doc)
 {
     _sw.store(SWork::loadObjects);
     StringBuffer buffer;
@@ -196,7 +196,7 @@ void MessageServer::processServerLoadObjects(uWS::WebSocket<SERVER>* socket, con
     _sw.store(SWork::nothing);
 }
 
-void MessageServer::processServerUnknown(uWS::WebSocket<SERVER>* socket, const Document& doc)
+void MessageServer::processServerUnknown(WebSocket<SERVER>* socket, const Document& doc)
 {
     log("Unknown server message");
 }
