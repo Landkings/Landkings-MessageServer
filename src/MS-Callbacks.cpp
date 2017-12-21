@@ -69,6 +69,7 @@ void MessageServer::onWebServerHttpRequest(HttpResponse* response, HttpRequest r
     response->write(httpOkStr.data(), httpOkStr.length()); // TODO: unknown bug
     response->end();
     */
+
     Header nickHeader = request.getHeader("nickname");
     if (!nickHeader.key) // TODO: del
     {
@@ -87,8 +88,8 @@ void MessageServer::onWebServerHttpRequest(HttpResponse* response, HttpRequest r
 
     //val.SetString(data, length); good way
 
-    // TODO: bad way
-    Header codeHeader = request.getHeader("sourceCode");
+    // TODO: bad way delete
+    Header codeHeader = request.getHeader("sourcecode");
     if (!codeHeader.key)
     {
         log("http request, code header -");
