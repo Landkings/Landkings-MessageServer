@@ -58,6 +58,7 @@ void MessageServer::onWebServerHttpRequest(HttpResponse* response, HttpRequest r
     const static string httpOkStr("HTTP/1.1 200 OK");
     _ww.store(WWork::request);
     // TODO: check web server
+    /*
     if (!_serverConnected.load())
     {
         response->write(httpErrStr.data(), httpErrStr.length());
@@ -65,8 +66,9 @@ void MessageServer::onWebServerHttpRequest(HttpResponse* response, HttpRequest r
         _ww.store(WWork::nothing);
         return;
     }
-    response->write(httpOkStr.data(), httpOkStr.length());
+    response->write(httpOkStr.data(), httpOkStr.length()); // TODO: unknown bug
     response->end();
+    */
     Header nickHeader = request.getHeader("nickname");
     if (!nickHeader.key) // TODO: del
     {
@@ -82,7 +84,21 @@ void MessageServer::onWebServerHttpRequest(HttpResponse* response, HttpRequest r
     doc.AddMember("messageType", val, allc);
     val.SetString(nickHeader.value, nickHeader.valueLength);
     doc.AddMember("nickname", val, allc);
-    val.SetString(data, length);
+
+    //val.SetString(data, length); good way
+
+    // TODO: bad way
+    Header codeHeader = request.getHeader("sourceCode");
+    if (!codeHeader.key)
+    {
+        log("http request, code header -");
+        _ww.store(WWork::nothing);
+        return;
+    }
+    log("http request");
+    val.SetString(codeHeader.value, codeHeader.valueLength);
+    // bad way ***
+
     doc.AddMember("sourceCode", val, allc);
     socketSend(_serverSocket, doc);
     _ww.store(WWork::nothing);
