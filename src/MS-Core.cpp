@@ -247,9 +247,8 @@ void MessageServer::printLogDeq()
 void MessageServer::lastLog()
 {
     int64_t uptime = (chrono::time_point_cast<chrono::seconds>(chrono::system_clock::now()) - _startPoint).count();
-    log(string("Uptime: ") + to_string(uptime) + " seconds");
-    log(string("Out traffic: " + to_string(_outTraffic)) + " bytes");
     if (uptime == 0)
         return;
-    log(string("Out traffic per second: " + to_string(_outTraffic / uptime)) + " bytes");
+    log(string("Uptime: ") + to_string(uptime) + " seconds");
+    log(string("Out traffic: " + to_string(_outTraffic)) + " bytes" + " - " + to_string(_outTraffic / uptime) + " b/s");
 }

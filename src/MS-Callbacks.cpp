@@ -57,7 +57,13 @@ void MessageServer::onWebServerHttpRequest(HttpResponse* response, HttpRequest r
     const static string httpErrStr("HTTP/1.1 500 Internal Server Error");
     const static string httpOkStr("HTTP/1.1 200 OK");
     _ww.store(WWork::request);
-    // TODO: check web server
+
+    /*
+    Header secretHeader = request.getHeader("secret");
+    if (!secretHeader.key || secretHeader.valueLength != _secretMessage.length() ||
+        strncmp(secretHeader.value, _secretMessage.data(), secretHeader.valueLength))
+        goto InvalidRequest;
+        */
     /*
     if (!_serverConnected.load())
     {
@@ -69,13 +75,8 @@ void MessageServer::onWebServerHttpRequest(HttpResponse* response, HttpRequest r
     response->write(httpOkStr.data(), httpOkStr.length()); // TODO: unknown bug
     response->end();
     */
+
     Header nickHeader = request.getHeader("nickname");
-    if (!nickHeader.key) // TODO: del
-    {
-        log("http request, nick header -");
-        _ww.store(WWork::nothing);
-        return;
-    }
     Document doc;
     doc.SetObject();
     Document::AllocatorType& allc = doc.GetAllocator();
@@ -87,7 +88,9 @@ void MessageServer::onWebServerHttpRequest(HttpResponse* response, HttpRequest r
     val.SetString(data, length);
     doc.AddMember("sourceCode", val, allc);
     socketSend(_serverSocket, doc);
+//InvalidRequest:
     _ww.store(WWork::nothing);
+    return;
 }
 
 // *** CLIENT CALLBACKS ***
@@ -101,9 +104,10 @@ void MessageServer::onClientConnection(WebSocket<SERVER>* socket, HttpRequest re
         _cw.store(CWork::nothing);
         return;
     }
-    int transferGroupId = rand() % _clientGroup.size();
+    int transferGroupId = 0; /* = rand() % _clientGroup.size();
     if (transferGroupId != 0)
         socket->transfer(_clientGroup[transferGroupId]);
+        */
     _clientIp.insert(socket->getAddress().address);
     _clientSocket.insert(socket);
     if (!_mapReceived.load())
@@ -181,6 +185,7 @@ void MessageServer::processServerLoadObjects(WebSocket<SERVER>* socket, const Do
     docBuffer(doc, buffer);
     _loadedObjects.assign(buffer.GetString(), buffer.GetLength());
     log("Objects loaded");
+    /*
     vector<atomic<bool>> broadcasted(_clientGroup.size());
     for (unsigned i = 1; i < _clientGroup.size(); ++i)
     {
@@ -191,10 +196,13 @@ void MessageServer::processServerLoadObjects(WebSocket<SERVER>* socket, const Do
             broadcasted[i].store(true);
         }, i).detach();
     }
+    */
     _hub[client]->getDefaultGroup<SERVER>().broadcast(_loadedObjects.data(), _loadedObjects.length(), TEXT);
+    /*
     for (unsigned i = 1; i < _clientGroup.size(); ++i)
         if (!broadcasted[i].load())
             i = 0;
+            */
     _sw.store(SWork::nothing);
 }
 
