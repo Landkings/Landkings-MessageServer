@@ -18,11 +18,6 @@ void MessageServer::sendMap(WebSocket<SERVER>* socket)
     socketSend(socket, _loadedMap);
 }
 
-void MessageServer::sendObjects(WebSocket<SERVER>* socket)
-{
-    socketSend(socket, _loadedObjects);
-}
-
 void MessageServer::socketSend(WebSocket<SERVER>* socket, const string& message)
 {
     _outTraffic += message.length();
@@ -37,11 +32,10 @@ void MessageServer::socketSend(WebSocket<SERVER>* socket, const Document& doc)
     socket->send(buffer.GetString(), buffer.GetLength(), TEXT);
 }
 
-const char* MessageServer::docBuffer(const Document& doc, StringBuffer& buffer)
+void MessageServer::docBuffer(const Document& doc, StringBuffer& buffer)
 {
     Writer<StringBuffer> writer(buffer);
     doc.Accept(writer);
-    return buffer.GetString();
 }
 
 void MessageServer::setServerCallbacks()
@@ -70,9 +64,6 @@ void MessageServer::setClientCallbacks()
                                   placeholders::_1, placeholders::_2);
     auto disconnectionHandler = bind(&MessageServer::onClientDisconnection, this,
                                      placeholders::_1, placeholders::_2, placeholders::_3, placeholders::_4);
-    for (unsigned i = 0; i < _clientGroup.size(); ++i)
-    {
-        _clientGroup[i]->onConnection(connectionHandler);
-        _clientGroup[i]->onDisconnection(disconnectionHandler);
-    }
+    _hub[client]->onConnection(connectionHandler);
+    _hub[client]->onDisconnection(disconnectionHandler);
 }

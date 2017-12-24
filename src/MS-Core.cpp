@@ -7,7 +7,7 @@ using namespace std;
 using namespace uWS;
 
 
-const int MessageServer::FREE_THREADS = std::thread::hardware_concurrency() - 5 <= 0 ? 0 : std::thread::hardware_concurrency() - 5;
+bool MessageServer::_lcExpected = false;
 
 MessageServer::MessageServer() : _hub(HUBS), _threadTerminated(HUBS), _port(HUBS)
 {
@@ -26,7 +26,7 @@ void MessageServer::terminate()
     if (_logThreadTeminated)
         return;
     while (!_started.load())
-        customSleep<nano>(1);
+        customSleep<milli>(10);
     log("Termination");
     vector<atomic<bool>> callbacksStoped(_hub.size());
     for (unsigned i = 0; i < HUBS; ++i)
@@ -34,7 +34,7 @@ void MessageServer::terminate()
     for (unsigned i = 0; i < HUBS; ++i)
         terminateHub(i, callbacksStoped.data());
     while (!_logThreadTeminated.load())
-        customSleep<nano>(1);
+        customSleep<milli>(10);
     _log.close();
 }
 
@@ -46,7 +46,6 @@ void MessageServer::terminateHub(int i, atomic<bool>* callbacksStoped)
         Hub* h = getFromVoid<Hub*>(asyncData);
         atomic<bool>* callbacksStoped = getFromVoid<atomic<bool>*>(asyncData, sizeof(Hub*));
         void* hubData = h->getDefaultGroup<SERVER>().getUserData();
-        MessageServer* _this = getFromVoid<MessageServer*>(hubData);
         int i = getFromVoid<int>(hubData + sizeof(MessageServer*));
         callbacksStoped[i].store(true);
         for (int i = 0; i < HUBS; ++i)
@@ -54,14 +53,6 @@ void MessageServer::terminateHub(int i, atomic<bool>* callbacksStoped)
                 i = -1;
         h->getDefaultGroup<SERVER>().close(static_cast<int>(CloseCode::termination));
         h->getDefaultGroup<SERVER>().terminate();
-        if (i == client)
-        {
-            for (unsigned j = 1; j < _this->_clientGroup.size(); ++j)
-            {
-                _this->_clientGroup[j]->close(static_cast<int>(CloseCode::termination));
-                _this->_clientGroup[j]->terminate();
-            }
-        }
         async->close();
         free(asyncData);
     };
@@ -71,6 +62,28 @@ void MessageServer::terminateHub(int i, atomic<bool>* callbacksStoped)
     putToVoid<atomic<bool>*>(data, callbacksStoped, sizeof(Hub*));
     async->setData(data);
     async->start(eventLoopTermPost);
+    async->send();
+}
+
+void MessageServer::sleepHub(int i, atomic<bool>& sleeped, atomic<bool>& wake)
+{
+    auto eventLoopSleep = [](Async* async)
+    {
+        void* data = async->getData();
+        atomic<bool>* sleeped = getFromVoid<atomic<bool>*>(data);
+        atomic<bool>* wake = getFromVoid<atomic<bool>*>(data + sizeof(atomic<bool>*));
+        sleeped->store(true);
+        while (!wake->load())
+            customSleep<micro>(10);
+        async->close();
+        free(async->data);
+    };
+    Async* async = new Async(_hub[i]->getLoop());
+    void* data = malloc(2 * sizeof(atomic<bool>*));
+    putToVoid<atomic<bool>*>(data, &sleeped);
+    putToVoid<atomic<bool>*>(data, &wake, sizeof(atomic<bool>*));
+    async->setData(data);
+    async->start(eventLoopSleep);
     async->send();
 }
 
@@ -86,16 +99,11 @@ void MessageServer::init()
     _logThreadTeminated.store(false);
     for (unsigned i = 0; i < HUBS; ++i)
         _threadTerminated[i].store(false);
-    _logMutex.unlock();
+    _logCaptured = false;
     _loadedMap = "";
-    _loadedObjects = "";
     _logDeq.clear();
     _clientIp.clear();
     _clientSocket.clear();
-    _clientGroup.clear();
-    _sw = SWork::nothing;
-    _ww = WWork::nothing;
-    _cw = CWork::nothing;
     _outTraffic = 0;
 }
 
@@ -128,10 +136,10 @@ void MessageServer::logThreadFunction()
     while (true)
     {
         customSleep<milli>(LOG_INTERVAL);
-        while (!_logMutex.try_lock())
-            customSleep<nano>(1);
+        while (!_logCaptured.compare_exchange_strong(_lcExpected, true))
+            customSleep<micro>(5);
         printLogDeq();
-        _logMutex.unlock();
+        _logCaptured.store(false);
         if (_threadTerminated[server].load() && _threadTerminated[webServer].load() && _threadTerminated[client].load())
         {
             lastLog();
@@ -175,19 +183,12 @@ void MessageServer::clientThreadFunction(uint16_t port)
 {
     log("Client thread running");
     _hub[client] = new Hub();
-    _clientGroup.push_back(&_hub[client]->getDefaultGroup<SERVER>());
-    setGroupData(_clientGroup[0], client);
-    for (int i = 1; i <= FREE_THREADS; ++i)
-    {
-        _clientGroup.push_back(_hub[client]->createGroup<SERVER>());
-        setGroupData(_clientGroup[i], client);
-    }
+    setGroupData(&_hub[client]->getDefaultGroup<SERVER>(), client);
     setClientCallbacks();
     _hub[client]->listen(port);
     _hub[client]->run();
     _threadTerminated[client].store(true);
-    for (unsigned i = 0; i < _clientGroup.size(); ++i)
-        free(_clientGroup[i]->getUserData());
+    free(_hub[client]->getDefaultGroup<SERVER>().getUserData());
     delete _hub[client];
     log("Client thread terminated");
 }
@@ -214,7 +215,7 @@ T MessageServer::getFromVoid(void* base, int offset)
 
 // *** LOG ***
 
-void MessageServer::log(string msg)
+void MessageServer::log(const string& msg)
 {
     stringstream buffer;
     time_t t = time(nullptr);
@@ -226,10 +227,10 @@ void MessageServer::log(string msg)
            << setfill('0') << setw(2) << curTime->tm_sec
            << ')';
     buffer << ' ' << msg << '\n';
-    while (!_logMutex.try_lock())
-        customSleep<nano>(1);
+    while (!_logCaptured.compare_exchange_strong(_lcExpected, true))
+        customSleep<micro>(10);
     _logDeq.push_back(buffer.str());
-    _logMutex.unlock();
+    _logCaptured.store(false);
 }
 
 void MessageServer::printLogDeq()

@@ -24,35 +24,17 @@ private:
     {
         mapNotReceived = 4001, duplicatedConnection, termination
     };
-
     enum class SInMessageType
     {
         unknown = -1, loadMap, loadObjects
     };
-
-    enum class SWork
-    {
-        nothing, connection, disconnection, loadObjects, loadMap
-    };
-
-    enum class CWork
-    {
-        nothing, connection, disconnection
-    };
-
-    enum class WWork
-    {
-        nothing, request
-    };
-
     enum HubID
     {
         server = 0, webServer, client
     };
 
     static constexpr int HUBS = 3;
-    static constexpr int LOG_INTERVAL = 500; // ms
-    static const int FREE_THREADS;
+    static constexpr int LOG_INTERVAL = 50; // ms
 
     //********************************************************
 
@@ -60,25 +42,18 @@ private:
     std::vector<std::atomic<bool>> _threadTerminated;
     std::vector<uint16_t> _port;
 
-    std::vector<uWS::Group<uWS::SERVER>*> _clientGroup;
-
-    std::atomic<SWork> _sw;
-    std::atomic<CWork> _cw;
-    std::atomic<WWork> _ww;
-
     uWS::WebSocket<uWS::SERVER>* _serverSocket;
     std::unordered_set<uWS::WebSocket<uWS::SERVER>*> _clientSocket;
     std::unordered_set<std::string> _clientIp;
     std::atomic<bool> _serverConnected;
     std::atomic<bool> _mapReceived;
     std::string _secretMessage;
-
     std::string _loadedMap;
-    std::string _loadedObjects;
 
     std::ofstream _log;
     std::deque<std::string> _logDeq;
-    std::mutex _logMutex;
+    std::atomic<bool> _logCaptured;
+    static bool _lcExpected;
 
     std::atomic<bool> _started;
     std::atomic<bool> _logThreadTeminated;
@@ -97,11 +72,12 @@ private:
     template<class T>
     static T getFromVoid(void* base, int offset = 0);
 
+    void sleepHub(int i, std::atomic<bool>& sleeped, std::atomic<bool>& wake);
     void terminateHub(int i, std::atomic<bool>* callbacksStoped);
     void init();
     void restart();
 
-    void log(std::string msg);
+    void log(const std::string& msg);
     void printLogDeq();
 
     // *** CALLBACKS ***
@@ -131,7 +107,7 @@ private:
     void socketSend(uWS::WebSocket<uWS::SERVER>* socket, const rapidjson::Document& doc);
     void sendMap(uWS::WebSocket<uWS::SERVER>* socket);
     void sendObjects(uWS::WebSocket<uWS::SERVER>* socket);
-    static const char* docBuffer(const rapidjson::Document& doc, rapidjson::StringBuffer& buffer);
+    static void docBuffer(const rapidjson::Document& doc, rapidjson::StringBuffer& buffer);
     void lastLog();
     template<typename T>
     static void customSleep(unsigned val)

@@ -42,11 +42,6 @@ void MessageServer::onServerMessage(WebSocket<SERVER>* socket, char* message, si
 {
     Document doc;
     doc.Parse(message, length);
-    if (!doc.IsObject())
-    {
-        log("Invalid server JSON");
-        return;
-    }
     processServerMessage(socket, doc);
 }
 
@@ -54,27 +49,23 @@ void MessageServer::onServerMessage(WebSocket<SERVER>* socket, char* message, si
 
 void MessageServer::onWebServerHttpRequest(HttpResponse* response, HttpRequest request, char* data, size_t length, size_t remainingBytes)
 {
-    const static string httpErrStr("HTTP/1.1 500 Internal Server Error");
-    const static string httpOkStr("HTTP/1.1 200 OK");
-    _ww.store(WWork::request);
+    const static string httpErrStr("HTTP/1.1 500 Internal Server Error\nContent-Length: 0\nConnection: closed\n\n\n");
+    const static string httpOkStr("HTTP/1.1 200 OK\nContent-Length: 0\nConnection: closed\n\n\n");
 
-    /*
     Header secretHeader = request.getHeader("secret");
     if (!secretHeader.key || secretHeader.valueLength != _secretMessage.length() ||
         strncmp(secretHeader.value, _secretMessage.data(), secretHeader.valueLength))
-        goto InvalidRequest;
-        */
-    /*
+        return;
+
+    log("Http request");
     if (!_serverConnected.load())
     {
         response->write(httpErrStr.data(), httpErrStr.length());
         response->end();
-        _ww.store(WWork::nothing);
         return;
     }
-    response->write(httpOkStr.data(), httpOkStr.length()); // TODO: unknown bug
+    response->write(httpOkStr.data(), httpOkStr.length());
     response->end();
-    */
 
     Header nickHeader = request.getHeader("nickname");
     Document doc;
@@ -88,42 +79,31 @@ void MessageServer::onWebServerHttpRequest(HttpResponse* response, HttpRequest r
     val.SetString(data, length);
     doc.AddMember("sourceCode", val, allc);
     socketSend(_serverSocket, doc);
-//InvalidRequest:
-    _ww.store(WWork::nothing);
-    return;
 }
 
 // *** CLIENT CALLBACKS ***
 
 void MessageServer::onClientConnection(WebSocket<SERVER>* socket, HttpRequest request)
 {
-    _cw.store(CWork::connection);
     if (_clientIp.find(socket->getAddress().address) != _clientIp.end())
     {
         socket->close(static_cast<int>(CloseCode::duplicatedConnection));
-        _cw.store(CWork::nothing);
         return;
     }
-    int transferGroupId = 0; /* = rand() % _clientGroup.size();
-    if (transferGroupId != 0)
-        socket->transfer(_clientGroup[transferGroupId]);
-        */
     _clientIp.insert(socket->getAddress().address);
     _clientSocket.insert(socket);
     if (!_mapReceived.load())
     {
         socket->close(static_cast<int>(CloseCode::mapNotReceived));
-        _cw.store(CWork::nothing);
         return;
     }
-    log(string("Client connected: group = ") + to_string(transferGroupId) + " address = " + socket->getAddress().family + socket->getAddress().address);
+    log(string("Client connected: ") + "address = " + socket->getAddress().family + socket->getAddress().address +
+        " clients = " + to_string(_clientSocket.size()));
     sendMap(socket);
-    _cw.store(CWork::nothing);
 }
 
 void MessageServer::onClientDisconnection(WebSocket<SERVER>* socket, int code, char* message, size_t length)
 {
-    _cw.store(CWork::disconnection);
     if (_clientSocket.find(socket) != _clientSocket.end())
     {
         log(string("Client disconnected: code = ") + to_string(code) + " address = " + socket->getAddress().family + socket->getAddress().address);
@@ -132,7 +112,6 @@ void MessageServer::onClientDisconnection(WebSocket<SERVER>* socket, int code, c
     }
     else
         log(string("Decline client connection: code = " + to_string(code)));
-    _cw.store(CWork::nothing);
 }
 
 // *** SERVER MESSAGE ***
@@ -169,41 +148,19 @@ void MessageServer::processServerMessage(WebSocket<SERVER>* socket, const Docume
 
 void MessageServer::processServerLoadMap(WebSocket<SERVER>* socket, const Document& doc)
 {
-    _sw.store(SWork::loadMap);
     StringBuffer buffer;
     docBuffer(doc, buffer);
     _loadedMap.assign(buffer.GetString(), buffer.GetLength());
     _mapReceived.store(true);
     log("Map loaded");
-    _sw.store(SWork::nothing);
 }
 
 void MessageServer::processServerLoadObjects(WebSocket<SERVER>* socket, const Document& doc)
 {
-    _sw.store(SWork::loadObjects);
     StringBuffer buffer;
     docBuffer(doc, buffer);
-    _loadedObjects.assign(buffer.GetString(), buffer.GetLength());
     log("Objects loaded");
-    /*
-    vector<atomic<bool>> broadcasted(_clientGroup.size());
-    for (unsigned i = 1; i < _clientGroup.size(); ++i)
-    {
-        broadcasted[i].store(false);
-        thread([this, &broadcasted](int i)
-        {
-            _clientGroup[i]->broadcast(_loadedObjects.data(), _loadedObjects.length(), TEXT);
-            broadcasted[i].store(true);
-        }, i).detach();
-    }
-    */
-    _hub[client]->getDefaultGroup<SERVER>().broadcast(_loadedObjects.data(), _loadedObjects.length(), TEXT);
-    /*
-    for (unsigned i = 1; i < _clientGroup.size(); ++i)
-        if (!broadcasted[i].load())
-            i = 0;
-            */
-    _sw.store(SWork::nothing);
+    _hub[client]->getDefaultGroup<SERVER>().broadcast(buffer.GetString(), buffer.GetLength(), TEXT);
 }
 
 void MessageServer::processServerUnknown(WebSocket<SERVER>* socket, const Document& doc)
