@@ -99,16 +99,11 @@ void MessageServer::onClientConnection(WebSocket<SERVER>* socket, HttpRequest re
     }
     log(string("Client connected: ") + "address = " + socket->getAddress().family + socket->getAddress().address +
         " clients = " + to_string(_clientSocket.size()));
-    while (!_clientMutex.try_lock()) // TODO: del
-        customSleep<micro>(5);
     sendMap(socket);
-    _clientMutex.unlock(); // TODO: del
 }
 
 void MessageServer::onClientDisconnection(WebSocket<SERVER>* socket, int code, char* message, size_t length)
 {
-    while (!_clientMutex.try_lock()) // TODO: del
-        customSleep<micro>(5);
     if (_clientSocket.find(socket) != _clientSocket.end())
     {
         log(string("Client disconnected: code = ") + to_string(code) + " address = " + socket->getAddress().family + socket->getAddress().address);
@@ -117,7 +112,6 @@ void MessageServer::onClientDisconnection(WebSocket<SERVER>* socket, int code, c
     }
     else
         log(string("Decline client connection: code = " + to_string(code)));
-    _clientMutex.unlock(); // TODO: del
 }
 
 // *** SERVER MESSAGE ***

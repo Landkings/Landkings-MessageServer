@@ -35,6 +35,7 @@ private:
 
     static constexpr int HUBS = 3;
     static constexpr int LOG_INTERVAL = 50; // ms
+    const static bool _falseExpected;
 
     //********************************************************
 
@@ -49,12 +50,10 @@ private:
     std::atomic<bool> _mapReceived;
     std::string _secretMessage;
     std::string _loadedMap;
-    std::mutex _clientMutex;
 
     std::ofstream _log;
     std::deque<std::string> _logDeq;
     std::atomic<bool> _logCaptured;
-    static bool _falseExpected;
 
     std::atomic<bool> _started;
     std::atomic<bool> _logThreadTeminated;

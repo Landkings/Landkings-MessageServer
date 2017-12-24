@@ -30,6 +30,7 @@ void setSigIntHandler()
 
 int main(int argc, char** argv)
 {
+
     srand(clock());
     options_description desc;
     vector<int> usePort(3);
@@ -82,6 +83,7 @@ int main(int argc, char** argv)
     MessageServer mServer;
     mServerPtr = &mServer;
     setSigIntHandler();
+
     mServer.start(usePort[0], usePort[1], usePort[2]);
     if (time >= 0)
         this_thread::sleep_for(chrono::seconds(time));

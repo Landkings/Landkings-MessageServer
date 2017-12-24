@@ -7,7 +7,7 @@ using namespace std;
 using namespace uWS;
 
 
-bool MessageServer::_falseExpected = false;
+const bool MessageServer::_falseExpected = false;
 
 MessageServer::MessageServer() : _hub(HUBS), _threadTerminated(HUBS), _port(HUBS)
 {
@@ -136,7 +136,7 @@ void MessageServer::logThreadFunction()
     while (true)
     {
         customSleep<milli>(LOG_INTERVAL);
-        while (!_logCaptured.compare_exchange_strong(_falseExpected, true))
+        while (!_logCaptured.compare_exchange_strong(const_cast<bool&>(_falseExpected), true))
             customSleep<micro>(5);
         printLogDeq();
         _logCaptured.store(false);
@@ -215,7 +215,7 @@ void MessageServer::log(const string& msg)
            << setfill('0') << setw(2) << curTime->tm_sec
            << ')';
     buffer << ' ' << msg << '\n';
-    while (!_logCaptured.compare_exchange_strong(_falseExpected, true))
+    while (!_logCaptured.compare_exchange_strong(const_cast<bool&>(_falseExpected), true))
         customSleep<micro>(10);
     _logDeq.push_back(buffer.str());
     _logCaptured.store(false);
