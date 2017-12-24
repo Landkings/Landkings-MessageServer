@@ -201,18 +201,6 @@ void MessageServer::setGroupData(Group<SERVER>* g, int i)
     g->setUserData(data);
 }
 
-template<class T>
-void MessageServer::putToVoid(void* base, T val, int offset)
-{
-    *static_cast<T*>(base + offset) = val;
-}
-
-template<class T>
-T MessageServer::getFromVoid(void* base, int offset)
-{
-    return *static_cast<T*>(base + offset);
-}
-
 // *** LOG ***
 
 void MessageServer::log(const string& msg)

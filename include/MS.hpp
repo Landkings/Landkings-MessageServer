@@ -68,10 +68,6 @@ private:
     void webServerThreadFunction(uint16_t port);
     void clientThreadFunction(uint16_t port);
     void setGroupData(uWS::Group<uWS::SERVER>* g, int i);
-    template<class T>
-    static void putToVoid(void* base, T val, int offset = 0);
-    template<class T>
-    static T getFromVoid(void* base, int offset = 0);
 
     void sleepHub(int i, std::atomic<bool>& sleeped, std::atomic<bool>& wake);
     void terminateHub(int i, std::atomic<bool>* callbacksStoped);
@@ -103,16 +99,30 @@ private:
     void processServerUnknown(uWS::WebSocket<uWS::SERVER>* socket, const rapidjson::Document& doc);
 
     // *** FUNCTIONS ***
+    void injectObjectsSending(const rapidjson::Document& doc);
     void sendAcceptConnection();
     void socketSend(uWS::WebSocket<uWS::SERVER>* socket, const std::string& message);
     void socketSend(uWS::WebSocket<uWS::SERVER>* socket, const rapidjson::Document& doc);
     void sendMap(uWS::WebSocket<uWS::SERVER>* socket);
     void sendObjects(uWS::WebSocket<uWS::SERVER>* socket);
     static void docBuffer(const rapidjson::Document& doc, rapidjson::StringBuffer& buffer);
+    static rapidjson::StringBuffer* docBuffer(const rapidjson::Document& doc);
     void lastLog();
+
+    // ********************
     template<typename T>
     static void customSleep(unsigned val)
     {
         std::this_thread::sleep_for(std::chrono::duration<int64_t, T>(val));
+    }
+    template<class T>
+    static void putToVoid(void* base, T val, int offset = 0)
+    {
+        *static_cast<T*>(base + offset) = val;
+    }
+    template<class T>
+    static T getFromVoid(void* base, int offset = 0)
+    {
+        return *static_cast<T*>(base + offset);
     }
 };

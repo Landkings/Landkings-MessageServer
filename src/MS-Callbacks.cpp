@@ -163,16 +163,33 @@ void MessageServer::processServerLoadMap(WebSocket<SERVER>* socket, const Docume
 
 void MessageServer::processServerLoadObjects(WebSocket<SERVER>* socket, const Document& doc)
 {
-    StringBuffer buffer;
-    docBuffer(doc, buffer);
     log("Objects loaded");
-    while (!_clientMutex.try_lock()) // TODO: del
-        customSleep<micro>(5);
-    _hub[client]->getDefaultGroup<SERVER>().broadcast(buffer.GetString(), buffer.GetLength(), TEXT);
-    _clientMutex.unlock(); // TODO: del
+    injectObjectsSending(doc);
 }
 
 void MessageServer::processServerUnknown(WebSocket<SERVER>* socket, const Document& doc)
 {
     log("Unknown server message");
+}
+
+void MessageServer::injectObjectsSending(const Document& doc)
+{
+    auto sendingInjector = [](Async* async)
+    {
+        void* data = async->getData();
+        StringBuffer* buffer = getFromVoid<StringBuffer*>(data, 0);
+        Hub* clientHub = getFromVoid<Hub*>(data + sizeof(StringBuffer*));
+        clientHub->Group<SERVER>::broadcast(buffer->GetString(), buffer->GetLength(), TEXT);
+        async->close();
+        delete buffer;
+        free(data);
+    };
+    StringBuffer* buffer = docBuffer(doc);
+    Async* async = new Async(_hub[client]->getLoop());
+    void* data = malloc(sizeof(StringBuffer*) + sizeof(Hub*));
+    putToVoid(data, buffer, 0);
+    putToVoid(data, _hub[client], sizeof(StringBuffer*));
+    async->setData(data);
+    async->start(sendingInjector);
+    async->send();
 }

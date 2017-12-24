@@ -38,6 +38,14 @@ void MessageServer::docBuffer(const Document& doc, StringBuffer& buffer)
     doc.Accept(writer);
 }
 
+StringBuffer* MessageServer::docBuffer(const Document& doc)
+{
+    StringBuffer* buffer = new StringBuffer();
+    Writer<StringBuffer> writer(*buffer);
+    doc.Accept(writer);
+    return buffer;
+}
+
 void MessageServer::setServerCallbacks()
 {
     auto connectionHandler = bind(&MessageServer::onServerConnection, this,
