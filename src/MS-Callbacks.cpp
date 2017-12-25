@@ -40,9 +40,66 @@ void MessageServer::onServerDisconnetion(WebSocket<SERVER>* socket, int code, ch
 
 void MessageServer::onServerMessage(WebSocket<SERVER>* socket, char* message, size_t length, OpCode opCode)
 {
-    Document doc;
-    doc.Parse(message, length);
-    processServerMessage(socket, doc);
+    InputMessageType type = getServerMessageType(*message);
+    switch (type)
+    {
+        case InputMessageType::loadMap:
+            processServerLoadMap(message + 1, length - 1);
+            return;
+        case InputMessageType::loadObjects:
+            processServerLoadObjects(message + 1, length - 1);
+            return;
+        case InputMessageType::unknown:
+            return;
+    }
+}
+
+MessageServer::InputMessageType MessageServer::getServerMessageType(char firstChar) const
+{
+    switch (firstChar)
+    {
+        case 'm':
+            return InputMessageType::loadMap;
+        case 'o':
+            return InputMessageType::loadObjects;
+        default:
+            return InputMessageType::unknown;
+    }
+}
+
+void MessageServer::processServerLoadMap(const char* message, size_t length)
+{
+    _loadedMap.assign(message, length);
+    _mapReceived.store(true);
+    log("Map loaded");
+}
+
+void MessageServer::processServerLoadObjects(const char* message, size_t length)
+{
+    log("Objects loaded");
+    injectObjectsSending(message, length);
+}
+
+void MessageServer::injectObjectsSending(const char* message, size_t length)
+{
+    auto sendingInjector = [](Async* async)
+    {
+        void* data = async->getData();
+        MessageServer* mServer = getFromVoid<MessageServer*>(data);
+        size_t length = getFromVoid<size_t>(data, sizeof(MessageServer*));
+        char* message = static_cast<char*>(data + sizeof(MessageServer*) + sizeof(size_t));
+        mServer->_hub[client]->getDefaultGroup<SERVER>().broadcast(message, length, TEXT);
+        async->close();
+        free(data);
+    };
+    Async* async = new Async(_hub[client]->getLoop());
+    void* data = malloc(sizeof(MessageServer*) + sizeof(size_t) + length * sizeof(char));
+    putToVoid(data, this);
+    putToVoid(data, length, sizeof(MessageServer*));
+    memcpy(data + sizeof(MessageServer*) + sizeof(size_t), message, length * sizeof(char));
+    async->setData(data);
+    async->start(sendingInjector);
+    async->send();
 }
 
 // *** WEB SERVER CALLBACKS ***
@@ -67,18 +124,13 @@ void MessageServer::onWebServerHttpRequest(HttpResponse* response, HttpRequest r
     response->write(httpOkStr.data(), httpOkStr.length());
     response->end();
 
+    string buffer;
+    setMessageType(OutputMessageType::newPlayer, buffer);
     Header nickHeader = request.getHeader("nickname");
-    Document doc;
-    doc.SetObject();
-    Document::AllocatorType& allc = doc.GetAllocator();
-    Value val(kStringType);
-    val.SetString("newPlayer");
-    doc.AddMember("messageType", val, allc);
-    val.SetString(nickHeader.value, nickHeader.valueLength);
-    doc.AddMember("nickname", val, allc);
-    val.SetString(data, length);
-    doc.AddMember("sourceCode", val, allc);
-    socketSend(_serverSocket, doc);
+    buffer.append(nickHeader.value, nickHeader.valueLength);
+    buffer += '\n';
+    buffer.append(data, length);
+    socketSend(_serverSocket, buffer);
 }
 
 // *** CLIENT CALLBACKS ***
@@ -112,78 +164,4 @@ void MessageServer::onClientDisconnection(WebSocket<SERVER>* socket, int code, c
     }
     else
         log(string("Decline client connection: code = " + to_string(code)));
-}
-
-// *** SERVER MESSAGE ***
-
-MessageServer::SInMessageType MessageServer::getServerMessageType(const Document& doc) const
-{
-    Document::ConstMemberIterator typeIterator = doc.FindMember("messageType");
-    if (typeIterator == doc.MemberEnd())
-        return SInMessageType::unknown;
-    string messageType = typeIterator->value.GetString();
-    if (messageType == "loadMap")
-        return SInMessageType::loadMap;
-    if (messageType == "loadObjects")
-        return SInMessageType::loadObjects;
-    return SInMessageType::unknown;
-}
-
-void MessageServer::processServerMessage(WebSocket<SERVER>* socket, const Document& doc)
-{
-    SInMessageType type = getServerMessageType(doc);
-    switch (type)
-    {
-        case SInMessageType::loadMap:
-            processServerLoadMap(socket, doc);
-            return;
-        case SInMessageType::loadObjects:
-            processServerLoadObjects(socket, doc);
-            return;
-        case SInMessageType::unknown:
-            processServerUnknown(socket, doc);
-            return;
-    }
-}
-
-void MessageServer::processServerLoadMap(WebSocket<SERVER>* socket, const Document& doc)
-{
-    StringBuffer buffer;
-    docBuffer(doc, buffer);
-    _loadedMap.assign(buffer.GetString(), buffer.GetLength());
-    _mapReceived.store(true);
-    log("Map loaded");
-}
-
-void MessageServer::processServerLoadObjects(WebSocket<SERVER>* socket, const Document& doc)
-{
-    log("Objects loaded");
-    injectObjectsSending(doc);
-}
-
-void MessageServer::processServerUnknown(WebSocket<SERVER>* socket, const Document& doc)
-{
-    log("Unknown server message");
-}
-
-void MessageServer::injectObjectsSending(const Document& doc)
-{
-    auto sendingInjector = [](Async* async)
-    {
-        void* data = async->getData();
-        StringBuffer* buffer = getFromVoid<StringBuffer*>(data, 0);
-        Hub* clientHub = getFromVoid<Hub*>(data + sizeof(StringBuffer*));
-        clientHub->Group<SERVER>::broadcast(buffer->GetString(), buffer->GetLength(), TEXT);
-        async->close();
-        delete buffer;
-        free(data);
-    };
-    StringBuffer* buffer = docBuffer(doc);
-    Async* async = new Async(_hub[client]->getLoop());
-    void* data = malloc(sizeof(StringBuffer*) + sizeof(Hub*));
-    putToVoid(data, buffer, 0);
-    putToVoid(data, _hub[client], sizeof(StringBuffer*));
-    async->setData(data);
-    async->start(sendingInjector);
-    async->send();
 }

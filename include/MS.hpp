@@ -24,10 +24,17 @@ private:
     {
         mapNotReceived = 4001, duplicatedConnection, termination
     };
-    enum class SInMessageType
+
+    enum class InputMessageType
     {
-        unknown = -1, loadMap, loadObjects
+        unknown = -1, loadMap = 'm', loadObjects = 'o'
     };
+
+    enum class OutputMessageType
+    {
+        unknown = -1, acceptConnection = 'c', newPlayer = 'p'
+    };
+
     enum HubID
     {
         server = 0, webServer, client
@@ -35,7 +42,7 @@ private:
 
     static constexpr int HUBS = 3;
     static constexpr int LOG_INTERVAL = 50; // ms
-    const static bool _falseExpected;
+    static bool _expectedFalse;
 
     //********************************************************
 
@@ -91,14 +98,15 @@ private:
     void setWebServerCallbacks();
     void setClientCallbacks();
 
-    SInMessageType getServerMessageType(const rapidjson::Document& doc) const;
-    void processServerMessage(uWS::WebSocket<uWS::SERVER>* socket, const rapidjson::Document& doc);
-    void processServerLoadMap(uWS::WebSocket<uWS::SERVER>* socket, const rapidjson::Document& doc);
-    void processServerLoadObjects(uWS::WebSocket<uWS::SERVER>* socket, const rapidjson::Document& doc);
-    void processServerUnknown(uWS::WebSocket<uWS::SERVER>* socket, const rapidjson::Document& doc);
+    InputMessageType getServerMessageType(char firstChar) const;
+    void processServerLoadMap(const char* message, size_t length);
+    void processServerLoadObjects(const char* message, size_t length);
 
     // *** FUNCTIONS ***
-    void injectObjectsSending(const rapidjson::Document& doc);
+    void setMessageType(OutputMessageType type, rapidjson::StringBuffer& buffer);
+    void setMessageType(OutputMessageType type, std::string& buffer);
+    void setMessageType(OutputMessageType type, char* buffer);
+    void injectObjectsSending(const char* message, size_t length);
     void sendAcceptConnection();
     void socketSend(uWS::WebSocket<uWS::SERVER>* socket, const std::string& message);
     void socketSend(uWS::WebSocket<uWS::SERVER>* socket, const rapidjson::Document& doc);
@@ -124,4 +132,5 @@ private:
     {
         return *static_cast<T*>(base + offset);
     }
+
 };

@@ -8,9 +8,14 @@ using namespace uWS;
 using namespace rapidjson;
 
 
+void MessageServer::setMessageType(OutputMessageType type, std::string& buffer)
+{
+    buffer.push_back(static_cast<char>(type));
+}
+
 void MessageServer::sendAcceptConnection()
 {
-    socketSend(_serverSocket, "{\"messageType\" : \"acceptConnection\"}");
+    socketSend(_serverSocket, "c");
 }
 
 void MessageServer::sendMap(WebSocket<SERVER>* socket)
