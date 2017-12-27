@@ -11,11 +11,12 @@ using namespace std;
 using namespace boost::program_options;
 
 
-MessageServer* mServerPtr = nullptr;
+MessageServer* mServerPtr;
 
 void sigIntHandler(int)
 {
-    mServerPtr->terminate();
+    while (!mServerPtr->terminate())
+        this_thread::sleep_for(chrono::milliseconds(10));
     cout << "Terminated normally" << endl;
     exit(0);
 }

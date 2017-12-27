@@ -18,8 +18,10 @@ public:
     MessageServer();
     ~MessageServer();
     void start(uint16_t serverPort, uint16_t webServerPort, uint16_t clientPort);
-    void terminate();
+    bool terminate();
 private:
+    typedef std::atomic<bool> Flag;
+
     enum class CloseCode
     {
         mapNotReceived = 4001, duplicatedConnection, termination
@@ -47,23 +49,25 @@ private:
     //********************************************************
 
     std::vector<uWS::Hub*> _hub;
-    std::vector<std::atomic<bool>> _threadTerminated;
+    std::vector<Flag> _loopRunning;
+    std::vector<Flag> _threadTerminated;
     std::vector<uint16_t> _port;
 
     uWS::WebSocket<uWS::SERVER>* _serverSocket;
     std::unordered_set<uWS::WebSocket<uWS::SERVER>*> _clientSocket;
-    std::unordered_set<std::string> _clientIp;
-    std::atomic<bool> _serverConnected;
-    std::atomic<bool> _mapReceived;
+    std::unordered_set<std::string> _clientIP;
+    Flag _serverConnected;
+    Flag _mapReceived;
     std::string _secretMessage;
     std::string _loadedMap;
 
     std::ofstream _log;
     std::deque<std::string> _logDeq;
-    std::atomic<bool> _logCaptured;
+    Flag _logCaptured;
 
-    std::atomic<bool> _started;
-    std::atomic<bool> _logThreadTeminated;
+    Flag _started;
+    Flag _termination;
+    Flag _logThreadTerminated;
 
     std::chrono::time_point<std::chrono::system_clock, std::chrono::seconds> _startPoint;
     unsigned long _outTraffic;
@@ -75,8 +79,8 @@ private:
     void clientThreadFunction(uint16_t port);
     void setGroupData(uWS::Group<uWS::SERVER>* g, int i);
 
-    void sleepHub(int i, std::atomic<bool>& sleeped, std::atomic<bool>& wake);
-    void terminateHub(int i, std::atomic<bool>* callbacksStoped);
+    void sleepHub(int i, Flag& sleeped, Flag& wake);
+    void terminateHub(int i, Flag* callbacksStoped);
     void init();
     void restart();
 

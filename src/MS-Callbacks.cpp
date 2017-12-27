@@ -137,12 +137,12 @@ void MessageServer::onWebServerHttpRequest(HttpResponse* response, HttpRequest r
 
 void MessageServer::onClientConnection(WebSocket<SERVER>* socket, HttpRequest request)
 {
-    if (_clientIp.find(socket->getAddress().address) != _clientIp.end())
+    if (_clientIP.find(socket->getAddress().address) != _clientIP.end())
     {
         socket->close(static_cast<int>(CloseCode::duplicatedConnection));
         return;
     }
-    _clientIp.insert(socket->getAddress().address);
+    _clientIP.insert(socket->getAddress().address);
     _clientSocket.insert(socket);
     if (!_mapReceived.load())
     {
@@ -160,7 +160,7 @@ void MessageServer::onClientDisconnection(WebSocket<SERVER>* socket, int code, c
     {
         log(string("Client disconnected: code = ") + to_string(code) + " address = " + socket->getAddress().family + socket->getAddress().address);
         _clientSocket.erase(socket);
-        _clientIp.erase(socket->getAddress().address);
+        _clientIP.erase(socket->getAddress().address);
     }
     else
         log(string("Decline client connection: code = " + to_string(code)));

@@ -9,7 +9,7 @@ using namespace uWS;
 
 bool MessageServer::_expectedFalse = false;
 
-MessageServer::MessageServer() : _hub(HUBS), _threadTerminated(HUBS), _port(HUBS)
+MessageServer::MessageServer() : _hub(HUBS), _threadTerminated(HUBS), _loopRunning(HUBS), _port(HUBS)
 {
 
 }
@@ -21,21 +21,33 @@ MessageServer::~MessageServer()
 
 // *** TERMINATION ***
 
-void MessageServer::terminate()
+bool MessageServer::terminate()
 {
-    if (_logThreadTeminated)
-        return;
-    while (!_started.load())
-        customSleep<milli>(10);
+    if (!_started.load())
+        return false;
+    if (_termination.load())
+    {
+        while (_termination.load())
+            customSleep<milli>(1);
+        return true;
+    }
+    _termination.store(true);
+    if (_logThreadTerminated)
+    {
+        _termination.store(false);
+        return true;
+    }
     log("Termination");
-    vector<atomic<bool>> callbacksStoped(_hub.size());
+    vector<atomic<bool>> callbacksStoped(HUBS);
     for (unsigned i = 0; i < HUBS; ++i)
         callbacksStoped[i] = false;
     for (unsigned i = 0; i < HUBS; ++i)
         terminateHub(i, callbacksStoped.data());
-    while (!_logThreadTeminated.load())
+    while (!_logThreadTerminated.load())
         customSleep<milli>(10);
     _log.close();
+    _termination.store(false);
+    return true;
 }
 
 void MessageServer::terminateHub(int i, atomic<bool>* callbacksStoped)
@@ -92,17 +104,18 @@ void MessageServer::sleepHub(int i, atomic<bool>& sleeped, atomic<bool>& wake)
 void MessageServer::init()
 {
     getline(std::ifstream("secret.txt"), _secretMessage);
-    _log.open("ws-server.log", ios_base::app);
+    _log.open("message-server.log", ios_base::app);
+    _termination = false;
     _serverConnected.store(false);
     _mapReceived.store(false);
     _started.store(false);
-    _logThreadTeminated.store(false);
+    _logThreadTerminated.store(false);
     for (unsigned i = 0; i < HUBS; ++i)
         _threadTerminated[i].store(false);
     _logCaptured = false;
     _loadedMap = "";
     _logDeq.clear();
-    _clientIp.clear();
+    _clientIP.clear();
     _clientSocket.clear();
     _outTraffic = 0;
 }
@@ -115,12 +128,17 @@ void MessageServer::start(uint16_t serverPort, uint16_t webServerPort, uint16_t 
     _port[server] = serverPort;
     _port[webServer] = webServerPort;
     thread(&MessageServer::logThreadFunction, this).detach();
+    customSleep<milli>(100);
     thread(&MessageServer::clientThreadFunction, this, clientPort).detach();
-    customSleep<milli>(500);
+    customSleep<milli>(100);
     thread(&MessageServer::serverThreadFunction, this, serverPort).detach();
-    customSleep<milli>(500);
+    customSleep<milli>(100);
     thread(&MessageServer::webServerThreadFunction, this, webServerPort).detach();
-    customSleep<milli>(500);
+    customSleep<milli>(100);
+    for (int i = 0; i < HUBS; ++i)
+        if (!_loopRunning[i].load())
+            i = -1;
+    customSleep<milli>(50);
     _started.store(true);
 }
 
@@ -145,7 +163,7 @@ void MessageServer::logThreadFunction()
             lastLog();
             log("Log thread terminated");
             printLogDeq();
-            _logThreadTeminated.store(true);
+            _logThreadTerminated.store(true);
             break;
         }
     }
@@ -158,6 +176,7 @@ void MessageServer::serverThreadFunction(uint16_t port)
     setGroupData(&_hub[server]->getDefaultGroup<SERVER>(), server);
     setServerCallbacks();
     _hub[server]->listen(port);
+    _loopRunning[server].store(true);
     _hub[server]->run();
     _threadTerminated[server].store(true);
     free(_hub[server]->getDefaultGroup<SERVER>().getUserData());
@@ -172,6 +191,7 @@ void MessageServer::webServerThreadFunction(uint16_t port)
     setGroupData(&_hub[webServer]->getDefaultGroup<SERVER>(), webServer);
     setWebServerCallbacks();
     _hub[webServer]->listen(port);
+    _loopRunning[webServer].store(true);
     _hub[webServer]->run();
     _threadTerminated[webServer].store(true);
     free(_hub[webServer]->getDefaultGroup<SERVER>().getUserData());
@@ -186,6 +206,7 @@ void MessageServer::clientThreadFunction(uint16_t port)
     setGroupData(&_hub[client]->getDefaultGroup<SERVER>(), client);
     setClientCallbacks();
     _hub[client]->listen(port);
+    _loopRunning[client].store(true);
     _hub[client]->run();
     _threadTerminated[client].store(true);
     free(_hub[client]->getDefaultGroup<SERVER>().getUserData());
