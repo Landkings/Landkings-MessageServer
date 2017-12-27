@@ -106,12 +106,15 @@ void MessageServer::init()
     getline(std::ifstream("secret.txt"), _secretMessage);
     _log.open("message-server.log", ios_base::app);
     _termination = false;
-    _serverConnected.store(false);
-    _mapReceived.store(false);
-    _started.store(false);
-    _logThreadTerminated.store(false);
+    _serverConnected = false;
+    _mapReceived = false;
+    _started = false;
+    _logThreadTerminated = false;
     for (unsigned i = 0; i < HUBS; ++i)
-        _threadTerminated[i].store(false);
+    {
+        _threadTerminated[i] = false;
+        _loopRunning[i] = false;
+    }
     _logCaptured = false;
     _loadedMap = "";
     _logDeq.clear();
