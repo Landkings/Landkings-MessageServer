@@ -1,6 +1,5 @@
 #include "MS.hpp"
 
-#include "rapidjson/stringbuffer.h"
 #include "rapidjson/writer.h"
 
 using namespace std;

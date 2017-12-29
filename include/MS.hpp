@@ -20,7 +20,19 @@ public:
     void start(uint16_t serverPort, uint16_t webServerPort, uint16_t clientPort);
     bool terminate();
 private:
+    typedef std::chrono::time_point<std::chrono::system_clock, std::chrono::nanoseconds> TimePoint;
     typedef std::atomic<bool> Flag;
+    typedef uWS::Group<uWS::SERVER> UGroup;
+    typedef uWS::WebSocket<uWS::SERVER> USocket;
+    typedef std::ratio<1, 1> EmptyRatio;
+
+    struct ClientInfo
+    {
+        ClientInfo(USocket* s) : socket(s), lastTry(std::chrono::system_clock::now()) {}
+        USocket* socket;
+        TimePoint lastTry;
+        int blc;
+    };
 
     enum class InputMessageType
     {
@@ -32,9 +44,14 @@ private:
         unknown = -1, acceptConnection = 'c', newPlayer = 'p'
     };
 
+    enum class ConnectionType
+    {
+        firstTime, reconnection, replace, blackListCandidat
+    };
+
     enum CloseCode
     {
-        mapNotReceived = 4001, duplicatedConnection, termination
+        mapNotReceived = 4001, replaceConnection, spamConnection, blackList, termination
     };
 
     enum HubID
@@ -52,8 +69,10 @@ private:
     std::vector<Flag> _threadTerminated;
     std::vector<uint16_t> _port;
 
-    uWS::WebSocket<uWS::SERVER>* _serverSocket;
-    std::unordered_map<std::string, uWS::WebSocket<uWS::SERVER>*> _clientInfo;
+    USocket* _serverSocket;
+    std::unordered_map<std::string, ClientInfo> _clientInfo;
+    std::unordered_map<std::string, TimePoint> _blackList;
+
     Flag _serverConnected;
     Flag _mapReceived;
     std::string _secretMessage;
@@ -69,7 +88,7 @@ private:
 
     Flag _objectsSending;
 
-    std::chrono::time_point<std::chrono::system_clock, std::chrono::seconds> _startPoint;
+    TimePoint _startPoint;
     unsigned long _outTraffic;
 
     // *** CORE ***
@@ -77,7 +96,7 @@ private:
     void serverThreadFunction(uint16_t port);
     void webServerThreadFunction(uint16_t port);
     void clientThreadFunction(uint16_t port);
-    void setGroupData(uWS::Group<uWS::SERVER>* g, int i);
+    void setGroupData(UGroup* g, int i);
 
     void sleepHub(int i, Flag& sleeped, Flag& wake);
     void terminateHub(int i, Flag* callbacksStoped);
@@ -106,6 +125,10 @@ private:
     void processServerLoadMap(const char* message, size_t length);
     void processServerLoadObjects(const char* message, size_t length);
 
+    ConnectionType getConnectionType(std::unordered_map<std::string, ClientInfo>::iterator& itr);
+    bool inBlackList(USocket* socket);
+    void toBlackList(std::unordered_map<std::string, ClientInfo>::iterator& itr);
+
     // *** FUNCTIONS ***
     void setMessageType(OutputMessageType type, std::string& buffer);
     void injectObjectsSending(const char* message, size_t length);
@@ -118,7 +141,13 @@ private:
     static rapidjson::StringBuffer* docBuffer(const rapidjson::Document& doc);
     void lastLog();
 
+
     // ********************
+    template<typename T>
+    static int64_t since(TimePoint& point)
+    {
+        return std::chrono::duration_cast<std::chrono::duration<int64_t, T>>(std::chrono::system_clock::now() - point).count();
+    }
     template<typename T>
     static void customSleep(unsigned val)
     {

@@ -152,32 +152,100 @@ void MessageServer::onWebServerHttpRequest(HttpResponse* response, HttpRequest r
 
 void MessageServer::onClientConnection(WebSocket<SERVER>* socket, HttpRequest request)
 {
-    bool socketReplace = false;
-    unordered_map<string, WebSocket<SERVER>*>::iterator itr = _clientInfo.find(socket->getAddress().address);
-    if (itr != _clientInfo.end())
+    if (inBlackList(socket))
     {
-        itr->second->close(duplicatedConnection);
-        socketReplace = true;
+        socket->close(blackList);
+        return;
     }
-    _clientInfo.insert(pair(socket->getAddress().address, socket));
+    const char* addr = socket->getAddress().address;
+    unordered_map<string, ClientInfo>::iterator itr = _clientInfo.find(socket->getAddress().address);
+    ConnectionType conType = getConnectionType(itr);
+    switch (conType)
+    {
+        case ConnectionType::firstTime:
+            _clientInfo.insert(pair(addr, socket));
+            break;
+        case ConnectionType::reconnection:
+            itr->second.socket = socket;
+            itr->second.lastTry = chrono::system_clock::now();
+            break;
+        case ConnectionType::replace:
+            itr->second.socket->close(replaceConnection);
+            itr->second.socket = socket;
+            itr->second.lastTry = chrono::system_clock::now();
+            break;
+        case ConnectionType::blackListCandidat:
+            if (itr->second.socket != nullptr)
+                itr->second.socket->close(replaceConnection);
+            itr->second.socket = socket;
+            itr->second.lastTry = chrono::system_clock::now();
+            if (++itr->second.blc == 3)
+            {
+                toBlackList(itr);
+                return;
+            }
+    }
+    if (conType != ConnectionType::blackListCandidat && conType != ConnectionType::firstTime)
+        itr->second.blc = 0;
     if (!_mapReceived.load())
     {
         socket->close(mapNotReceived);
         return;
     }
-    if (!socketReplace)
-        log(string("Client connected: ") + "IP = " + socket->getAddress().address +
-            " clients = " + to_string(_clientInfo.size()));
+    log(string("Client connected:") + " IP = " + addr +
+        " contype = " + to_string(static_cast<int>(conType)) +
+        " clients = " + to_string(_clientInfo.size()));
     sendMap(socket);
 }
 
 void MessageServer::onClientDisconnection(WebSocket<SERVER>* socket, int code, char* message, size_t length)
 {
     const char* addr = socket->getAddress().address;
-    if (code == duplicatedConnection)
-        log(string("Socket replaced: ") + "IP = " + addr);
-    else
-        log(string("Client disconnected: code = ") + to_string(code) + " IP = " + addr +
-            " clients = " + to_string(_clientInfo.size()));
-    _clientInfo.erase(addr);
+    unordered_map<string, ClientInfo>::iterator itr = _clientInfo.find(socket->getAddress().address);
+    if (itr != _clientInfo.end())
+        itr->second.socket = nullptr;
+    switch (code)
+    {
+        case replaceConnection:
+            log(string("Socket replaced: ") + "IP = " + addr);
+            break;
+        case spamConnection:
+            break;
+        default:
+            log(string("Client disconnected: code = ") + to_string(code) + " IP = " + addr +
+                " clients = " + to_string(_clientInfo.size()));
+            break;
+    }
+}
+
+MessageServer::ConnectionType MessageServer::getConnectionType(unordered_map<string, ClientInfo>::iterator& itr)
+{
+    if (itr != _clientInfo.end())
+    {
+        if (since<deci>(itr->second.lastTry) < 100)
+            return ConnectionType::blackListCandidat;
+        if (itr->second.socket != nullptr)
+            return ConnectionType::replace;
+        return ConnectionType::reconnection;
+    }
+    return ConnectionType::firstTime;
+}
+
+void MessageServer::toBlackList(unordered_map<string, ClientInfo>::iterator& itr)
+{
+    itr->second.socket->close(blackList);
+    _blackList.insert(pair<string, TimePoint>(itr->first, itr->second.lastTry));
+    _clientInfo.erase(itr);
+}
+
+bool MessageServer::inBlackList(USocket* socket)
+{
+    unordered_map<string, TimePoint>::iterator itr = _blackList.find(socket->getAddress().address);
+    if (itr != _blackList.end())
+    {
+        if (since<deci>(itr->second) < 6000)
+            return true;
+        _blackList.erase(itr);
+    }
+    return false;
 }
