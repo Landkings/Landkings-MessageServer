@@ -35,7 +35,6 @@ void MessageServer::onServerDisconnetion(WebSocket<SERVER>* socket, int code, ch
     log("Server disconneted: code = " + to_string(code));
     _serverConnected.store(false);
     _mapReceived.store(false);
-    _serverSocket = nullptr;
 }
 
 void MessageServer::onServerMessage(WebSocket<SERVER>* socket, char* message, size_t length, OpCode opCode)
@@ -77,11 +76,21 @@ void MessageServer::processServerLoadMap(const char* message, size_t length)
 void MessageServer::processServerLoadObjects(const char* message, size_t length)
 {
     log("Objects loaded");
-    injectObjectsSending(message, length);
+    if (!_objectsSending.load())
+    {
+        _objectsSending.store(true);
+        //injectObjectsSending(message, length);
+        _objectsSending.store(false);
+    }
+    else
+        log("Last objects pack not sent yet");
 }
 
 void MessageServer::injectObjectsSending(const char* message, size_t length)
 {
+    static size_t curMessageLength = 1000;
+    static void* data = malloc(sizeof(MessageServer*) + sizeof(size_t) + curMessageLength * sizeof(char));
+    //**********
     auto sendingInjector = [](Async* async)
     {
         void* data = async->getData();
@@ -89,11 +98,16 @@ void MessageServer::injectObjectsSending(const char* message, size_t length)
         size_t length = getFromVoid<size_t>(data, sizeof(MessageServer*));
         char* message = static_cast<char*>(data + sizeof(MessageServer*) + sizeof(size_t));
         mServer->_hub[client]->getDefaultGroup<SERVER>().broadcast(message, length, TEXT);
+        mServer->_objectsSending.store(false);
         async->close();
-        free(data);
     };
+    //**********
+    if (length > curMessageLength)
+    {
+        curMessageLength = length * 1.5;
+        data = realloc(data, curMessageLength);
+    }
     Async* async = new Async(_hub[client]->getLoop());
-    void* data = malloc(sizeof(MessageServer*) + sizeof(size_t) + length * sizeof(char));
     putToVoid(data, this);
     putToVoid(data, length, sizeof(MessageServer*));
     memcpy(data + sizeof(MessageServer*) + sizeof(size_t), message, length * sizeof(char));

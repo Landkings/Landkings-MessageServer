@@ -44,7 +44,6 @@ private:
 
     static constexpr int HUBS = 3;
     static constexpr int LOG_INTERVAL = 50; // ms
-    static bool _expectedFalse;
 
     //********************************************************
 
@@ -68,6 +67,8 @@ private:
     Flag _started;
     Flag _termination;
     Flag _logThreadTerminated;
+
+    Flag _objectsSending;
 
     std::chrono::time_point<std::chrono::system_clock, std::chrono::seconds> _startPoint;
     unsigned long _outTraffic;
@@ -107,9 +108,7 @@ private:
     void processServerLoadObjects(const char* message, size_t length);
 
     // *** FUNCTIONS ***
-    void setMessageType(OutputMessageType type, rapidjson::StringBuffer& buffer);
     void setMessageType(OutputMessageType type, std::string& buffer);
-    void setMessageType(OutputMessageType type, char* buffer);
     void injectObjectsSending(const char* message, size_t length);
     void sendAcceptConnection();
     void socketSend(uWS::WebSocket<uWS::SERVER>* socket, const std::string& message);

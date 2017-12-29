@@ -15,9 +15,10 @@ MessageServer* mServerPtr;
 
 void sigIntHandler(int)
 {
-    while (!mServerPtr->terminate())
-        this_thread::sleep_for(chrono::milliseconds(10));
-    cout << "Terminated normally" << endl;
+    if (mServerPtr->terminate())
+        cout << "\nSuccess termination\n" << endl;
+    else
+        cout << "\n\nTerminated, server not start\n" << endl;
     exit(0);
 }
 
@@ -31,7 +32,6 @@ void setSigIntHandler()
 
 int main(int argc, char** argv)
 {
-
     srand(clock());
     options_description desc;
     vector<int> usePort(3);
@@ -92,6 +92,6 @@ int main(int argc, char** argv)
         while (true)
             this_thread::sleep_for(chrono::seconds(5));
     mServer.terminate();
-    cout << "Terminated normally" << endl;
+    cout << "\nSuccess termination\n" << endl;
     return 0;
 }

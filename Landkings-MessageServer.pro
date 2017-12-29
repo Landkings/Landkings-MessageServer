@@ -14,4 +14,4 @@ SOURCES += main.cpp $$PWD/src/*.cpp
 
 HEADERS += $$PWD/include/*.hpp $$PWD/include/*.h
 
-LIBS += -luWS -lssl -lpthread -lboost_system -lz -lboost_program_options
+LIBS += -luWS -lssl -lpthread -lz -lboost_program_options -lboost_system

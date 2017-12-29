@@ -7,9 +7,7 @@ using namespace std;
 using namespace uWS;
 
 
-bool MessageServer::_expectedFalse = false;
-
-MessageServer::MessageServer() : _hub(HUBS), _threadTerminated(HUBS), _loopRunning(HUBS), _port(HUBS)
+MessageServer::MessageServer() : _hub(HUBS), _loopRunning(HUBS), _threadTerminated(HUBS), _port(HUBS)
 {
 
 }
@@ -110,6 +108,7 @@ void MessageServer::init()
     _mapReceived = false;
     _started = false;
     _logThreadTerminated = false;
+    _objectsSending = false;
     for (unsigned i = 0; i < HUBS; ++i)
     {
         _threadTerminated[i] = false;
@@ -157,8 +156,9 @@ void MessageServer::logThreadFunction()
     while (true)
     {
         customSleep<milli>(LOG_INTERVAL);
-        while (!_logCaptured.compare_exchange_strong(_expectedFalse, true))
+        while (_logCaptured.load()) // cmpxchng crash
             customSleep<micro>(5);
+        _logCaptured.store(true);
         printLogDeq();
         _logCaptured.store(false);
         if (_threadTerminated[server].load() && _threadTerminated[webServer].load() && _threadTerminated[client].load())
@@ -239,8 +239,9 @@ void MessageServer::log(const string& msg)
            << setfill('0') << setw(2) << curTime->tm_sec
            << ')';
     buffer << ' ' << msg << '\n';
-    while (!_logCaptured.compare_exchange_weak(_expectedFalse, true))
+    while (_logCaptured.load()) // cmpxchng crash
         customSleep<micro>(10);
+    _logCaptured.store(true);
     _logDeq.push_back(buffer.str());
     _logCaptured.store(false);
 }
