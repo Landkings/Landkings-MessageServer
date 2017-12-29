@@ -3,7 +3,7 @@
 #include <mutex>
 #include <atomic>
 #include <deque>
-#include <unordered_set>
+#include <unordered_map>
 #include <thread>
 #include <chrono>
 
@@ -22,11 +22,6 @@ public:
 private:
     typedef std::atomic<bool> Flag;
 
-    enum class CloseCode
-    {
-        mapNotReceived = 4001, duplicatedConnection, termination
-    };
-
     enum class InputMessageType
     {
         unknown = -1, loadMap = 'm', loadObjects = 'o'
@@ -35,6 +30,11 @@ private:
     enum class OutputMessageType
     {
         unknown = -1, acceptConnection = 'c', newPlayer = 'p'
+    };
+
+    enum CloseCode
+    {
+        mapNotReceived = 4001, duplicatedConnection, termination
     };
 
     enum HubID
@@ -53,8 +53,7 @@ private:
     std::vector<uint16_t> _port;
 
     uWS::WebSocket<uWS::SERVER>* _serverSocket;
-    std::unordered_set<uWS::WebSocket<uWS::SERVER>*> _clientSocket;
-    std::unordered_set<std::string> _clientIP;
+    std::unordered_map<std::string, uWS::WebSocket<uWS::SERVER>*> _clientInfo;
     Flag _serverConnected;
     Flag _mapReceived;
     std::string _secretMessage;

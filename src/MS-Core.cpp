@@ -117,8 +117,7 @@ void MessageServer::init()
     _logCaptured = false;
     _loadedMap = "";
     _logDeq.clear();
-    _clientIP.clear();
-    _clientSocket.clear();
+    _clientInfo.clear();
     _outTraffic = 0;
 }
 

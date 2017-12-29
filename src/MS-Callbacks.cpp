@@ -152,31 +152,32 @@ void MessageServer::onWebServerHttpRequest(HttpResponse* response, HttpRequest r
 
 void MessageServer::onClientConnection(WebSocket<SERVER>* socket, HttpRequest request)
 {
-    if (_clientIP.find(socket->getAddress().address) != _clientIP.end())
+    bool socketReplace = false;
+    unordered_map<string, WebSocket<SERVER>*>::iterator itr = _clientInfo.find(socket->getAddress().address);
+    if (itr != _clientInfo.end())
     {
-        socket->close(static_cast<int>(CloseCode::duplicatedConnection));
-        return;
+        itr->second->close(duplicatedConnection);
+        socketReplace = true;
     }
-    _clientIP.insert(socket->getAddress().address);
-    _clientSocket.insert(socket);
+    _clientInfo.insert(pair(socket->getAddress().address, socket));
     if (!_mapReceived.load())
     {
-        socket->close(static_cast<int>(CloseCode::mapNotReceived));
+        socket->close(mapNotReceived);
         return;
     }
-    log(string("Client connected: ") + "address = " + socket->getAddress().family + socket->getAddress().address +
-        " clients = " + to_string(_clientSocket.size()));
+    if (!socketReplace)
+        log(string("Client connected: ") + "IP = " + socket->getAddress().address +
+            " clients = " + to_string(_clientInfo.size()));
     sendMap(socket);
 }
 
 void MessageServer::onClientDisconnection(WebSocket<SERVER>* socket, int code, char* message, size_t length)
 {
-    if (_clientSocket.find(socket) != _clientSocket.end())
-    {
-        log(string("Client disconnected: code = ") + to_string(code) + " address = " + socket->getAddress().family + socket->getAddress().address);
-        _clientSocket.erase(socket);
-        _clientIP.erase(socket->getAddress().address);
-    }
+    const char* addr = socket->getAddress().address;
+    if (code == duplicatedConnection)
+        log(string("Socket replaced: ") + "IP = " + addr);
     else
-        log(string("Decline client connection: code = " + to_string(code)));
+        log(string("Client disconnected: code = ") + to_string(code) + " IP = " + addr +
+            " clients = " + to_string(_clientInfo.size()));
+    _clientInfo.erase(addr);
 }
