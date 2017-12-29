@@ -79,7 +79,7 @@ void MessageServer::processServerLoadObjects(const char* message, size_t length)
     if (!_objectsSending.load())
     {
         _objectsSending.store(true);
-        //injectObjectsSending(message, length);
+        injectObjectsSending(message, length);
         _objectsSending.store(false);
     }
     else
@@ -96,8 +96,9 @@ void MessageServer::injectObjectsSending(const char* message, size_t length)
         void* data = async->getData();
         MessageServer* mServer = getFromVoid<MessageServer*>(data);
         size_t length = getFromVoid<size_t>(data, sizeof(MessageServer*));
-        char* message = static_cast<char*>(data + sizeof(MessageServer*) + sizeof(size_t));
-        mServer->_hub[client]->getDefaultGroup<SERVER>().broadcast(message, length, TEXT);
+        char* objectsMsg = static_cast<char*>(data + sizeof(MessageServer*) + sizeof(size_t));
+        mServer->_hub[client]->getDefaultGroup<SERVER>().broadcast(objectsMsg, length, TEXT);
+        mServer->log(string("Broadcasted: \n") + string(objectsMsg, length));
         mServer->_objectsSending.store(false);
         async->close();
     };
