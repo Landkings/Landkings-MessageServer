@@ -4,7 +4,6 @@
 
 using namespace std;
 using namespace uWS;
-using namespace rapidjson;
 
 
 // *** SERVER CALLBACKS ***
@@ -192,7 +191,7 @@ void MessageServer::onClientConnection(WebSocket<SERVER>* socket, HttpRequest re
         socket->close(mapNotReceived);
         return;
     }
-    log(string("Client connected:") + " IP = " + addr +
+    log(string("Client cnt:") + " IP = " + addr +
         " contype = " + to_string(static_cast<int>(conType)) +
         " clients = " + to_string(_clientInfo.size()));
     sendMap(socket);
@@ -207,12 +206,13 @@ void MessageServer::onClientDisconnection(WebSocket<SERVER>* socket, int code, c
     switch (code)
     {
         case replaceConnection:
-            log(string("Socket replaced: ") + "IP = " + addr);
+            log(string("Socket rplc: ") + "IP = " + addr);
             break;
-        case spamConnection:
+        case blackList:
+            log(string("BL member dsc: ") + "IP = " + addr);
             break;
         default:
-            log(string("Client disconnected: code = ") + to_string(code) + " IP = " + addr +
+            log(string("Client dsc: code = ") + to_string(code) + " IP = " + addr +
                 " clients = " + to_string(_clientInfo.size()));
             break;
     }

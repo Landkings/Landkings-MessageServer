@@ -9,8 +9,6 @@
 
 #include <uWS/uWS.h>
 
-#include "rapidjson/document.h"
-#include "rapidjson/stringbuffer.h"
 
 class MessageServer
 {
@@ -51,7 +49,7 @@ private:
 
     enum CloseCode
     {
-        mapNotReceived = 4001, replaceConnection, spamConnection, blackList, termination
+        mapNotReceived = 4001, replaceConnection, blackList, termination
     };
 
     enum HubID
@@ -134,13 +132,9 @@ private:
     void injectObjectsSending(const char* message, size_t length);
     void sendAcceptConnection();
     void socketSend(uWS::WebSocket<uWS::SERVER>* socket, const std::string& message);
-    void socketSend(uWS::WebSocket<uWS::SERVER>* socket, const rapidjson::Document& doc);
     void sendMap(uWS::WebSocket<uWS::SERVER>* socket);
     void sendObjects(uWS::WebSocket<uWS::SERVER>* socket);
-    static void docBuffer(const rapidjson::Document& doc, rapidjson::StringBuffer& buffer);
-    static rapidjson::StringBuffer* docBuffer(const rapidjson::Document& doc);
     void lastLog();
-
 
     // ********************
     template<typename T>
@@ -163,5 +157,4 @@ private:
     {
         return *static_cast<T*>(base + offset);
     }
-
 };

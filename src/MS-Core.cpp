@@ -259,9 +259,9 @@ void MessageServer::printLogDeq()
 
 void MessageServer::lastLog()
 {
-    int64_t uptime = (chrono::time_point_cast<chrono::seconds>(chrono::system_clock::now()) - _startPoint).count();
+    int64_t uptime = chrono::duration_cast<chrono::seconds>(chrono::system_clock::now() - _startPoint).count();
     if (uptime == 0)
         return;
-    log(string("Uptime: ") + to_string(uptime) + " seconds");
+    log(string("Uptime: ") + to_string(uptime) + " sec");
     log(string("Out traffic: " + to_string(_outTraffic)) + " bytes" + " - " + to_string(_outTraffic / uptime) + " b/s");
 }

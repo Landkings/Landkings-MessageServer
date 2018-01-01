@@ -1,10 +1,7 @@
 #include "MS.hpp"
 
-#include "rapidjson/writer.h"
-
 using namespace std;
 using namespace uWS;
-using namespace rapidjson;
 
 
 void MessageServer::setMessageType(OutputMessageType type, std::string& buffer)
@@ -26,28 +23,6 @@ void MessageServer::socketSend(WebSocket<SERVER>* socket, const string& message)
 {
     _outTraffic += message.length();
     socket->send(message.data(), message.length(), TEXT);
-}
-
-void MessageServer::socketSend(WebSocket<SERVER>* socket, const Document& doc)
-{
-    StringBuffer buffer;
-    docBuffer(doc, buffer);
-    _outTraffic += buffer.GetLength();
-    socket->send(buffer.GetString(), buffer.GetLength(), TEXT);
-}
-
-void MessageServer::docBuffer(const Document& doc, StringBuffer& buffer)
-{
-    Writer<StringBuffer> writer(buffer);
-    doc.Accept(writer);
-}
-
-StringBuffer* MessageServer::docBuffer(const Document& doc)
-{
-    StringBuffer* buffer = new StringBuffer();
-    Writer<StringBuffer> writer(*buffer);
-    doc.Accept(writer);
-    return buffer;
 }
 
 void MessageServer::setServerCallbacks()
