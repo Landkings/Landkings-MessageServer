@@ -8,7 +8,7 @@ using namespace uWS;
 
 // *** SERVER CALLBACKS ***
 
-void MessageServer::onServerConnection(WebSocket<SERVER>* socket, HttpRequest request)
+void MessageServer::onServerConnection(USocket* socket, HttpRequest request)
 {
     log("Attempt connection as server");
     Header h;
@@ -27,7 +27,7 @@ CloseSocket:
     socket->close();
 }
 
-void MessageServer::onServerDisconnetion(WebSocket<SERVER>* socket, int code, char* message, size_t length)
+void MessageServer::onServerDisconnetion(USocket* socket, int code, char* message, size_t length)
 {
     if (socket != _serverSocket)
         return;
@@ -36,7 +36,7 @@ void MessageServer::onServerDisconnetion(WebSocket<SERVER>* socket, int code, ch
     _mapReceived.store(false);
 }
 
-void MessageServer::onServerMessage(WebSocket<SERVER>* socket, char* message, size_t length, OpCode opCode)
+void MessageServer::onServerMessage(USocket* socket, char* message, size_t length, OpCode opCode)
 {
     InputMessageType type = getServerMessageType(*message);
     switch (type)
@@ -89,15 +89,16 @@ void MessageServer::processServerLoadObjects(const char* message, size_t length)
 
 void MessageServer::injectObjectsSending(const char* message, size_t length)
 {
+    constexpr size_t preMessageDataSize = sizeof(MessageServer*) + sizeof(size_t);
     static size_t curMessageLength = 1024;
-    static void* data = malloc(sizeof(MessageServer*) + sizeof(size_t) + curMessageLength * sizeof(char));
+    static void* data = malloc(preMessageDataSize + curMessageLength * sizeof(char));
     //**********
     auto sendingInjector = [](Async* async)
     {
         void* data = async->getData();
         MessageServer* mServer = getFromVoid<MessageServer*>(data);
         size_t length = getFromVoid<size_t>(data, sizeof(MessageServer*));
-        char* objectsMsg = static_cast<char*>(data + sizeof(MessageServer*) + sizeof(size_t));
+        char* objectsMsg = static_cast<char*>(data + preMessageDataSize);
         mServer->_hub[client]->getDefaultGroup<SERVER>().broadcast(objectsMsg, length, TEXT);
         mServer->log(string("Broadcasted: \n") + string(objectsMsg, length));
         mServer->_objectsSending.store(false);
@@ -107,7 +108,7 @@ void MessageServer::injectObjectsSending(const char* message, size_t length)
     if (length > curMessageLength)
     {
         curMessageLength <<= length / curMessageLength;
-        data = realloc(data, curMessageLength);
+        data = realloc(data, preMessageDataSize + curMessageLength * sizeof(char));
     }
     Async* async = new Async(_hub[client]->getLoop());
     putToVoid(data, this);
@@ -153,7 +154,7 @@ void MessageServer::onWebServerHttpRequest(HttpResponse* response, HttpRequest r
 
 // *** CLIENT CALLBACKS ***
 
-void MessageServer::onClientConnection(WebSocket<SERVER>* socket, HttpRequest request)
+void MessageServer::onClientConnection(USocket* socket, HttpRequest request)
 {
     if (blackListMember(socket))
     {
@@ -201,7 +202,7 @@ void MessageServer::onClientConnection(WebSocket<SERVER>* socket, HttpRequest re
     sendMap(socket);
 }
 
-void MessageServer::onClientDisconnection(WebSocket<SERVER>* socket, int code, char* message, size_t length)
+void MessageServer::onClientDisconnection(USocket* socket, int code, char* message, size_t length)
 {
     const char* addr = socket->getAddress().address;
     unordered_map<string, ClientInfo>::iterator itr = _clientInfo.find(socket->getAddress().address);

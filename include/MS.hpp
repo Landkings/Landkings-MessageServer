@@ -1,6 +1,5 @@
 #pragma once
 #include <fstream>
-#include <mutex>
 #include <atomic>
 #include <deque>
 #include <unordered_map>
@@ -58,7 +57,7 @@ private:
     };
 
     static constexpr int HUBS = 3;
-    static constexpr int LOG_INTERVAL = 50; // ms
+    static constexpr int LOG_INTERVAL = 200; // ms
 
     //********************************************************
 
@@ -105,15 +104,15 @@ private:
     void printLogDeq();
 
     // *** CALLBACKS ***
-    void onServerConnection(uWS::WebSocket<uWS::SERVER>* socket, uWS::HttpRequest request);
-    void onServerDisconnetion(uWS::WebSocket<uWS::SERVER>* socket, int code, char* message, size_t length);
-    void onServerMessage(uWS::WebSocket<uWS::SERVER>* socket, char* message, size_t length, uWS::OpCode opCode);
+    void onServerConnection(USocket* socket, uWS::HttpRequest request);
+    void onServerDisconnetion(USocket* socket, int code, char* message, size_t length);
+    void onServerMessage(USocket* socket, char* message, size_t length, uWS::OpCode opCode);
 
     void onWebServerHttpRequest(uWS::HttpResponse* response, uWS::HttpRequest request,
                                 char *data, size_t length, size_t remainingBytes);
 
-    void onClientConnection(uWS::WebSocket<uWS::SERVER>* socket, uWS::HttpRequest request);
-    void onClientDisconnection(uWS::WebSocket<uWS::SERVER>* socket, int code, char* message, size_t length);
+    void onClientConnection(USocket* socket, uWS::HttpRequest request);
+    void onClientDisconnection(USocket* socket, int code, char* message, size_t length);
 
     void setServerCallbacks();
     void setWebServerCallbacks();
@@ -131,9 +130,9 @@ private:
     void setMessageType(OutputMessageType type, std::string& buffer);
     void injectObjectsSending(const char* message, size_t length);
     void sendAcceptConnection();
-    void socketSend(uWS::WebSocket<uWS::SERVER>* socket, const std::string& message);
-    void sendMap(uWS::WebSocket<uWS::SERVER>* socket);
-    void sendObjects(uWS::WebSocket<uWS::SERVER>* socket);
+    void socketSend(USocket* socket, const std::string& message);
+    void sendMap(USocket* socket);
+    void sendObjects(USocket* socket);
     void lastLog();
 
     // ********************

@@ -216,7 +216,7 @@ void MessageServer::clientThreadFunction(uint16_t port)
     log("Client thread terminated");
 }
 
-void MessageServer::setGroupData(Group<SERVER>* g, int i)
+void MessageServer::setGroupData(UGroup* g, int i)
 {
     void* data = malloc(sizeof(MessageServer*) + sizeof(int));
     putToVoid<MessageServer*>(data, this);
