@@ -36,7 +36,7 @@ bool MessageServer::terminate()
         return true;
     }
     log("Termination");
-    vector<atomic<bool>> callbacksStoped(HUBS);
+    vector<Flag> callbacksStoped(HUBS);
     for (unsigned i = 0; i < HUBS; ++i)
         callbacksStoped[i] = false;
     for (unsigned i = 0; i < HUBS; ++i)
@@ -48,13 +48,13 @@ bool MessageServer::terminate()
     return true;
 }
 
-void MessageServer::terminateHub(int i, atomic<bool>* callbacksStoped)
+void MessageServer::terminateHub(int i, Flag* callbacksStoped)
 {
     auto eventLoopTermPost = [](Async* async)
     {
         void* asyncData = async->getData();
         Hub* h = getFromVoid<Hub*>(asyncData);
-        atomic<bool>* callbacksStoped = getFromVoid<atomic<bool>*>(asyncData, sizeof(Hub*));
+        Flag* callbacksStoped = getFromVoid<Flag*>(asyncData, sizeof(Hub*));
         void* hubData = h->getDefaultGroup<SERVER>().getUserData();
         int i = getFromVoid<int>(hubData + sizeof(MessageServer*));
         callbacksStoped[i].store(true);
@@ -67,21 +67,21 @@ void MessageServer::terminateHub(int i, atomic<bool>* callbacksStoped)
         free(asyncData);
     };
     Async* async = new Async(_hub[i]->getLoop());
-    void* data = malloc(sizeof(Hub*) + sizeof(atomic<bool>*));
+    void* data = malloc(sizeof(Hub*) + sizeof(Flag*));
     putToVoid<Hub*>(data, _hub[i]);
-    putToVoid<atomic<bool>*>(data, callbacksStoped, sizeof(Hub*));
+    putToVoid<Flag*>(data, callbacksStoped, sizeof(Hub*));
     async->setData(data);
     async->start(eventLoopTermPost);
     async->send();
 }
 
-void MessageServer::sleepHub(int i, atomic<bool>& sleeped, atomic<bool>& wake)
+void MessageServer::sleepHub(int i, Flag& sleeped, Flag& wake)
 {
     auto eventLoopSleep = [](Async* async)
     {
         void* data = async->getData();
-        atomic<bool>* sleeped = getFromVoid<atomic<bool>*>(data);
-        atomic<bool>* wake = getFromVoid<atomic<bool>*>(data + sizeof(atomic<bool>*));
+        Flag* sleeped = getFromVoid<Flag*>(data);
+        Flag* wake = getFromVoid<Flag*>(data + sizeof(Flag*));
         sleeped->store(true);
         while (!wake->load())
             customSleep<micro>(10);
@@ -89,9 +89,9 @@ void MessageServer::sleepHub(int i, atomic<bool>& sleeped, atomic<bool>& wake)
         free(async->data);
     };
     Async* async = new Async(_hub[i]->getLoop());
-    void* data = malloc(2 * sizeof(atomic<bool>*));
-    putToVoid<atomic<bool>*>(data, &sleeped);
-    putToVoid<atomic<bool>*>(data, &wake, sizeof(atomic<bool>*));
+    void* data = malloc(2 * sizeof(Flag*));
+    putToVoid<Flag*>(data, &sleeped);
+    putToVoid<Flag*>(data, &wake, sizeof(Flag*));
     async->setData(data);
     async->start(eventLoopSleep);
     async->send();

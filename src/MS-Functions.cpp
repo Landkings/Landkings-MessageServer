@@ -14,12 +14,12 @@ void MessageServer::sendAcceptConnection()
     socketSend(_serverSocket, "c");
 }
 
-void MessageServer::sendMap(WebSocket<SERVER>* socket)
+void MessageServer::sendMap(USocket* socket)
 {
     socketSend(socket, _loadedMap);
 }
 
-void MessageServer::socketSend(WebSocket<SERVER>* socket, const string& message)
+void MessageServer::socketSend(USocket* socket, const string& message)
 {
     _outTraffic += message.length();
     socket->send(message.data(), message.length(), TEXT);

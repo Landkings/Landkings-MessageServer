@@ -21,14 +21,14 @@ private:
     typedef std::atomic<bool> Flag;
     typedef uWS::Group<uWS::SERVER> UGroup;
     typedef uWS::WebSocket<uWS::SERVER> USocket;
-    typedef std::ratio<1, 1> EmptyRatio;
+    typedef std::ratio<1, 1> OneRatio;
 
     struct ClientInfo
     {
         ClientInfo(USocket* s) : socket(s), lastTry(std::chrono::system_clock::now()) {}
         USocket* socket;
         TimePoint lastTry;
-        int blc;
+        int blackListBehavior;
     };
 
     enum class InputMessageType

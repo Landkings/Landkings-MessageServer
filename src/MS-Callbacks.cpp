@@ -156,6 +156,7 @@ void MessageServer::onWebServerHttpRequest(HttpResponse* response, HttpRequest r
 
 void MessageServer::onClientConnection(USocket* socket, HttpRequest request)
 {
+    // TODO: may be clear _clientInfo?
     if (blackListMember(socket))
     {
         socket->close(blackList);
@@ -174,7 +175,9 @@ void MessageServer::onClientConnection(USocket* socket, HttpRequest request)
             itr->second.lastTry = chrono::system_clock::now();
             break;
         case ConnectionType::replace:
-            itr->second.socket->close(replaceSocket);
+            if (itr->second.socket != nullptr)
+                itr->second.socket->close(replaceSocket);
+            //itr->second.socket->close(replaceSocket);
             itr->second.socket = socket;
             itr->second.lastTry = chrono::system_clock::now();
             break;
@@ -183,14 +186,14 @@ void MessageServer::onClientConnection(USocket* socket, HttpRequest request)
                 itr->second.socket->close(replaceSocket);
             itr->second.socket = socket;
             itr->second.lastTry = chrono::system_clock::now();
-            if (++itr->second.blc == 5)
+            if (++itr->second.blackListBehavior == 5)
             {
                 toBlackList(itr);
                 return;
             }
     }
     if (conType != ConnectionType::blackListCandidat && conType != ConnectionType::firstTime)
-        itr->second.blc = 0;
+        itr->second.blackListBehavior = 0;
     if (!_mapReceived.load())
     {
         socket->close(mapNotReceived);
