@@ -49,7 +49,7 @@ private:
 
     enum CloseCode
     {
-        mapNotReceived = 4001, replaceConnection, blackList, termination
+        mapNotReceived = 4001, replaceSocket, blackList, termination
     };
 
     enum HubID
@@ -124,7 +124,7 @@ private:
     void processServerLoadObjects(const char* message, size_t length);
 
     ConnectionType getConnectionType(std::unordered_map<std::string, ClientInfo>::iterator& itr);
-    bool inBlackList(USocket* socket);
+    bool blackListMember(USocket* socket);
     void toBlackList(std::unordered_map<std::string, ClientInfo>::iterator& itr);
 
     // *** FUNCTIONS ***

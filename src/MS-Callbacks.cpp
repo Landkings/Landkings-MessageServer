@@ -31,7 +31,7 @@ void MessageServer::onServerDisconnetion(WebSocket<SERVER>* socket, int code, ch
 {
     if (socket != _serverSocket)
         return;
-    log("Server disconneted: code = " + to_string(code));
+    log(string("Server disconneted:") + " code = " + to_string(code));
     _serverConnected.store(false);
     _mapReceived.store(false);
 }
@@ -74,7 +74,9 @@ void MessageServer::processServerLoadMap(const char* message, size_t length)
 
 void MessageServer::processServerLoadObjects(const char* message, size_t length)
 {
-    log("Objects loaded");
+    static unsigned long objectsCounter = 0;
+    if (++objectsCounter % 1000 == 0 || objectsCounter == 0)
+        log("Objects loaded");
     if (!_objectsSending.load())
     {
         _objectsSending.store(true);
@@ -87,7 +89,7 @@ void MessageServer::processServerLoadObjects(const char* message, size_t length)
 
 void MessageServer::injectObjectsSending(const char* message, size_t length)
 {
-    static size_t curMessageLength = 1000;
+    static size_t curMessageLength = 1024;
     static void* data = malloc(sizeof(MessageServer*) + sizeof(size_t) + curMessageLength * sizeof(char));
     //**********
     auto sendingInjector = [](Async* async)
@@ -104,7 +106,7 @@ void MessageServer::injectObjectsSending(const char* message, size_t length)
     //**********
     if (length > curMessageLength)
     {
-        curMessageLength = length * 1.5;
+        curMessageLength <<= length / curMessageLength;
         data = realloc(data, curMessageLength);
     }
     Async* async = new Async(_hub[client]->getLoop());
@@ -138,7 +140,9 @@ void MessageServer::onWebServerHttpRequest(HttpResponse* response, HttpRequest r
     response->write(httpOkStr.data(), httpOkStr.length());
     response->end();
 
+    static constexpr size_t expectedMaxBufferSize = 8192;
     string buffer;
+    buffer.reserve(expectedMaxBufferSize);
     setMessageType(OutputMessageType::newPlayer, buffer);
     Header nickHeader = request.getHeader("nickname");
     buffer.append(nickHeader.value, nickHeader.valueLength);
@@ -151,7 +155,7 @@ void MessageServer::onWebServerHttpRequest(HttpResponse* response, HttpRequest r
 
 void MessageServer::onClientConnection(WebSocket<SERVER>* socket, HttpRequest request)
 {
-    if (inBlackList(socket))
+    if (blackListMember(socket))
     {
         socket->close(blackList);
         return;
@@ -169,16 +173,16 @@ void MessageServer::onClientConnection(WebSocket<SERVER>* socket, HttpRequest re
             itr->second.lastTry = chrono::system_clock::now();
             break;
         case ConnectionType::replace:
-            itr->second.socket->close(replaceConnection);
+            itr->second.socket->close(replaceSocket);
             itr->second.socket = socket;
             itr->second.lastTry = chrono::system_clock::now();
             break;
         case ConnectionType::blackListCandidat:
             if (itr->second.socket != nullptr)
-                itr->second.socket->close(replaceConnection);
+                itr->second.socket->close(replaceSocket);
             itr->second.socket = socket;
             itr->second.lastTry = chrono::system_clock::now();
-            if (++itr->second.blc == 3)
+            if (++itr->second.blc == 5)
             {
                 toBlackList(itr);
                 return;
@@ -191,7 +195,7 @@ void MessageServer::onClientConnection(WebSocket<SERVER>* socket, HttpRequest re
         socket->close(mapNotReceived);
         return;
     }
-    log(string("Client cnt:") + " IP = " + addr +
+    log(string("Client cnnt:") + " IP = " + addr +
         " contype = " + to_string(static_cast<int>(conType)) +
         " clients = " + to_string(_clientInfo.size()));
     sendMap(socket);
@@ -205,11 +209,11 @@ void MessageServer::onClientDisconnection(WebSocket<SERVER>* socket, int code, c
         itr->second.socket = nullptr;
     switch (code)
     {
-        case replaceConnection:
+        case replaceSocket:
             log(string("Socket rplc: ") + "IP = " + addr);
             break;
         case blackList:
-            log(string("BL member dsc: ") + "IP = " + addr);
+            log(string("Blist member dsc: ") + "IP = " + addr);
             break;
         default:
             log(string("Client dsc: code = ") + to_string(code) + " IP = " + addr +
@@ -238,7 +242,7 @@ void MessageServer::toBlackList(unordered_map<string, ClientInfo>::iterator& itr
     _clientInfo.erase(itr);
 }
 
-bool MessageServer::inBlackList(USocket* socket)
+bool MessageServer::blackListMember(USocket* socket)
 {
     unordered_map<string, TimePoint>::iterator itr = _blackList.find(socket->getAddress().address);
     if (itr != _blackList.end())
