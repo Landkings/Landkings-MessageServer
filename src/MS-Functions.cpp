@@ -4,14 +4,53 @@ using namespace std;
 using namespace uWS;
 
 
-void MessageServer::setMessageType(OutputMessageType type, std::string& buffer)
+bool MessageServer::connectionSpammer(ClientInfo* clientInfo)
 {
-    buffer.push_back(static_cast<char>(type));
+    TimePoint cur = chrono::system_clock::now();
+    if (since<One>(clientInfo->lastConnection, cur) < 5)
+    {
+        if (++clientInfo->frqConnectionCounter == 5)
+        {
+            // TODO: send http block
+            eraseClientInfo(clientInfo);
+            clientInfo->socket->close(blockRequestSended);
+            return true;
+        }
+    }
+    else
+        clientInfo->frqConnectionCounter = 0;
+    clientInfo->lastConnection = cur;
+    return false;
+}
+
+bool MessageServer::messageSpammer(ClientInfo* clientInfo)
+{
+    TimePoint cur = chrono::system_clock::now();
+    if (since<deci>(clientInfo->lastMessage, cur) < 15)
+    {
+        if (++clientInfo->frqMessageCounter == 15)
+        {
+            // TODO: send http block
+            eraseClientInfo(clientInfo);
+            clientInfo->socket->close(blockRequestSended);
+            return true;
+        }
+    }
+    else
+        clientInfo->frqMessageCounter = 0;
+    clientInfo->lastMessage = cur;
+    return false;
+}
+
+void MessageServer::eraseClientInfo(ClientInfo* clientInfo)
+{
+    _clientInfoNick.erase(clientInfo->nick);
+    _clientInfoSessid.erase(clientInfo->sessid);
 }
 
 void MessageServer::sendAcceptConnection()
 {
-    socketSend(_serverSocket, "c");
+    socketSend(_gameSocket, "c");
 }
 
 void MessageServer::sendMap(USocket* socket)
@@ -25,24 +64,30 @@ void MessageServer::socketSend(USocket* socket, const string& message)
     socket->send(message.data(), message.length(), TEXT);
 }
 
-void MessageServer::setServerCallbacks()
+void MessageServer::socketSend(USocket* socket, const char* message, size_t length)
 {
-    auto connectionHandler = bind(&MessageServer::onServerConnection, this,
-                                  placeholders::_1, placeholders::_2);
-    auto disconnectionHandler = bind(&MessageServer::onServerDisconnetion, this,
-                                     placeholders::_1, placeholders::_2, placeholders::_3, placeholders::_4);
-    auto messageHandler = bind(&MessageServer::onServerMessage, this,
-                                placeholders::_1, placeholders::_2, placeholders::_3, placeholders::_4);
-    _hub[server]->onConnection(connectionHandler);
-    _hub[server]->onDisconnection(disconnectionHandler);
-    _hub[server]->onMessage(messageHandler);
+    _outTraffic += length;
+    socket->send(message, length, TEXT);
 }
 
-void MessageServer::setWebServerCallbacks()
+void MessageServer::setGameCallbacks()
 {
-    auto requestHandler = bind(&MessageServer::onWebServerHttpRequest, this,
+    auto connectionHandler = bind(&MessageServer::onGameConnection, this,
+                                  placeholders::_1, placeholders::_2);
+    auto disconnectionHandler = bind(&MessageServer::onGameDisconnetion, this,
+                                     placeholders::_1, placeholders::_2, placeholders::_3, placeholders::_4);
+    auto messageHandler = bind(&MessageServer::onGameMessage, this,
+                                placeholders::_1, placeholders::_2, placeholders::_3, placeholders::_4);
+    _hub[game]->onConnection(connectionHandler);
+    _hub[game]->onDisconnection(disconnectionHandler);
+    _hub[game]->onMessage(messageHandler);
+}
+
+void MessageServer::setWebCallbacks()
+{
+    auto requestHandler = bind(&MessageServer::onWebHttpRequest, this,
                                placeholders::_1, placeholders::_2, placeholders::_3, placeholders::_4, placeholders::_5);
-    _hub[webServer]->onHttpRequest(requestHandler);
+    _hub[web]->onHttpRequest(requestHandler);
 }
 
 void MessageServer::setClientCallbacks()
@@ -51,6 +96,9 @@ void MessageServer::setClientCallbacks()
                                   placeholders::_1, placeholders::_2);
     auto disconnectionHandler = bind(&MessageServer::onClientDisconnection, this,
                                      placeholders::_1, placeholders::_2, placeholders::_3, placeholders::_4);
+    auto messageHandler = bind(&MessageServer::onClientMessage, this,
+                               placeholders::_1, placeholders::_2, placeholders::_3, placeholders::_4);
     _hub[client]->onConnection(connectionHandler);
     _hub[client]->onDisconnection(disconnectionHandler);
+    _hub[client]->onMessage(messageHandler);
 }

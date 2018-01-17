@@ -1,6 +1,9 @@
 #include "MS.hpp"
 
 #include <random>
+#include <string_view>
+
+#include <curlpp/cURLpp.hpp>
 
 using namespace std;
 using namespace uWS;
@@ -8,75 +11,55 @@ using namespace uWS;
 
 // *** SERVER CALLBACKS ***
 
-void MessageServer::onServerConnection(USocket* socket, HttpRequest request)
+void MessageServer::onGameConnection(USocket* socket, HttpRequest request)
 {
-    log("Attempt connection as server");
     Header h;
     if (_serverConnected.load())
         goto CloseSocket;
     h = request.getHeader("secret");
     if (!h.key || h.valueLength != _secretMessage.length() || strncmp(h.value, _secretMessage.data(), h.valueLength))
         goto CloseSocket;
-    _serverSocket = socket;
+    _gameSocket = socket;
     sendAcceptConnection();
     _serverConnected.store(true);
     log("Server connected");
     return;
 CloseSocket:
-    log("Unsuccessful attempt");
     socket->close();
 }
 
-void MessageServer::onServerDisconnetion(USocket* socket, int code, char* message, size_t length)
+void MessageServer::onGameDisconnetion(USocket* socket, int code, char* message, size_t length)
 {
-    if (socket != _serverSocket)
+    if (socket != _gameSocket)
         return;
     log(string("Server disconneted:") + " code = " + to_string(code));
     _serverConnected.store(false);
     _mapReceived.store(false);
 }
 
-void MessageServer::onServerMessage(USocket* socket, char* message, size_t length, OpCode opCode)
+void MessageServer::onGameMessage(USocket* socket, char* message, size_t length, OpCode opCode)
 {
-    InputMessageType type = getServerMessageType(*message);
-    switch (type)
-    {
-        case InputMessageType::loadMap:
-            processServerLoadMap(message + 1, length - 1);
-            return;
-        case InputMessageType::loadObjects:
-            processServerLoadObjects(message + 1, length - 1);
-            return;
-        case InputMessageType::unknown:
-            return;
-    }
+    MessageProcessor prc = GAME_MESSAGE_PROCESSOR[static_cast<unsigned char>(message[0])];
+    if (prc)
+        (this->*prc)(message + 1, length - 1);
 }
 
-MessageServer::InputMessageType MessageServer::getServerMessageType(char firstChar) const
-{
-    switch (firstChar)
-    {
-        case 'm':
-            return InputMessageType::loadMap;
-        case 'o':
-            return InputMessageType::loadObjects;
-        default:
-            return InputMessageType::unknown;
-    }
-}
-
-void MessageServer::processServerLoadMap(const char* message, size_t length)
+void MessageServer::processGameMap(char* message, size_t length)
 {
     _loadedMap.assign(message, length);
     _mapReceived.store(true);
     log("Map loaded");
 }
 
-void MessageServer::processServerLoadObjects(const char* message, size_t length)
+void MessageServer::processGameObjects(char* message, size_t length)
 {
     static unsigned long objectsCounter = 0;
-    if (++objectsCounter % 1000 == 0 || objectsCounter == 0)
+    if (objectsCounter % 1000 == 0)
+    {
         log("Objects loaded");
+        log(string("Broadcasted:\n") + string(message, length));
+    }
+    ++objectsCounter;
     if (!_objectsSending.load())
     {
         _objectsSending.store(true);
@@ -93,14 +76,13 @@ void MessageServer::injectObjectsSending(const char* message, size_t length)
     static size_t curMessageLength = 1024;
     static void* data = malloc(preMessageDataSize + curMessageLength * sizeof(char));
     //**********
-    auto sendingInjector = [](Async* async)
+    auto sendingFunc = [](Async* async)
     {
         void* data = async->getData();
-        MessageServer* mServer = getFromVoid<MessageServer*>(data);
-        size_t length = getFromVoid<size_t>(data, sizeof(MessageServer*));
+        MessageServer* mServer = voidGet<MessageServer*>(data);
+        size_t length = voidGet<size_t>(data, sizeof(MessageServer*));
         char* objectsMsg = static_cast<char*>(data + preMessageDataSize);
         mServer->_hub[client]->getDefaultGroup<SERVER>().broadcast(objectsMsg, length, TEXT);
-        mServer->log(string("Broadcasted: \n") + string(objectsMsg, length));
         mServer->_objectsSending.store(false);
         async->close();
     };
@@ -111,149 +93,141 @@ void MessageServer::injectObjectsSending(const char* message, size_t length)
         data = realloc(data, preMessageDataSize + curMessageLength * sizeof(char));
     }
     Async* async = new Async(_hub[client]->getLoop());
-    putToVoid(data, this);
-    putToVoid(data, length, sizeof(MessageServer*));
+    voidPut(data, this);
+    voidPut(data, length, sizeof(MessageServer*));
     memcpy(data + sizeof(MessageServer*) + sizeof(size_t), message, length * sizeof(char));
     async->setData(data);
-    async->start(sendingInjector);
+    async->start(sendingFunc);
     async->send();
 }
 
 // *** WEB SERVER CALLBACKS ***
 
-void MessageServer::onWebServerHttpRequest(HttpResponse* response, HttpRequest request, char* data, size_t length, size_t remainingBytes)
+void MessageServer::onWebHttpRequest(HttpResponse* response, HttpRequest request, char* data, size_t length, size_t remainingBytes)
 {
-    const static string httpErrStr("HTTP/1.1 500 Internal Server Error\nContent-Length: 0\nConnection: closed\n\n\n");
-    const static string httpOkStr("HTTP/1.1 200 OK\nContent-Length: 0\nConnection: closed\n\n\n");
-
-    Header secretHeader = request.getHeader("secret");
-    if (!secretHeader.key || secretHeader.valueLength != _secretMessage.length() ||
-        strncmp(secretHeader.value, _secretMessage.data(), secretHeader.valueLength))
+    // [secret][messageType][message]
+    static const string httpErrStr("HTTP/1.1 500 Internal Server Error\nContent-Length: 0\nConnection: closed\n\n\n");
+    static const string httpOkStr("HTTP/1.1 200 OK\nContent-Length: 0\nConnection: closed\n\n\n");
+    if (length < _secretMessage.length() || strncmp(_secretMessage.data(), data, _secretMessage.length()))
         return;
-
-    log("Http request");
-    if (!_serverConnected.load())
-    {
-        response->write(httpErrStr.data(), httpErrStr.length());
-        response->end();
-        return;
-    }
+    MessageProcessor prc = WEB_MESSAGE_PROCESSOR[static_cast<unsigned char>(data[_secretMessage.length()])];
+    if (prc)
+        (this->*prc)(data + _secretMessage.length() + 1, length - _secretMessage.length() - 1);
     response->write(httpOkStr.data(), httpOkStr.length());
     response->end();
+}
 
-    static constexpr size_t expectedMaxBufferSize = 8192;
-    string buffer;
-    buffer.reserve(expectedMaxBufferSize);
-    setMessageType(OutputMessageType::newPlayer, buffer);
-    Header nickHeader = request.getHeader("nickname");
-    buffer.append(nickHeader.value, nickHeader.valueLength);
-    buffer += '\n';
-    buffer.append(data, length);
-    socketSend(_serverSocket, buffer);
+void MessageServer::processWebClientLogin(char* data, size_t length)
+{
+    // l[nick]>[sessid]
+    log(string("Client login:"));
+    string_view dataView(data, length);
+    size_t nlIdx = dataView.find_first_of('>');
+    string nick(dataView.substr(0, nlIdx));
+    string sessid(dataView.substr(nlIdx + 1));
+    auto itr = _clientInfoNick.find(nick);
+    if (itr == _clientInfoNick.end())
+    {
+        ClientInfo* clientInfo = new ClientInfo(nick, sessid);
+        _clientInfoNick[nick] = clientInfo;
+        _clientInfoSessid[sessid] = clientInfo;
+        return;
+    }
+    ClientInfo* clientInfo = itr->second;
+    _clientInfoSessid.erase(clientInfo->sessid);
+    _clientInfoSessid.insert(pair(sessid, clientInfo));
+    clientInfo->sessid = sessid;
+    clientInfo->frqConnectionCounter = 0;
+}
+
+void MessageServer::processWebClientExit(char* data, size_t length)
+{
+    // e[nick]
+    log(string("Client exit:"));
+    ClientInfo* clientInfo = _clientInfoNick[string(data, length)];
+    _clientInfoSessid.erase(clientInfo->sessid);
+}
+
+void MessageServer::processWebAddPlayer(char* data, size_t length)
+{
+    // p[nick]>[code]
+    log(string("New character:"));
+    socketSend(_gameSocket, data - 1, length + 1);
 }
 
 // *** CLIENT CALLBACKS ***
 
+
 void MessageServer::onClientConnection(USocket* socket, HttpRequest request)
 {
-    // TODO: may be clear _clientInfo?
-    if (blackListMember(socket))
-    {
-        socket->close(blackList);
-        return;
-    }
-    const char* addr = socket->getAddress().address;
-    unordered_map<string, ClientInfo>::iterator itr = _clientInfo.find(socket->getAddress().address);
-    ConnectionType conType = getConnectionType(itr);
-    switch (conType)
-    {
-        case ConnectionType::firstTime:
-            _clientInfo.insert(pair(addr, socket));
-            break;
-        case ConnectionType::reconnection:
-            itr->second.socket = socket;
-            itr->second.lastTry = chrono::system_clock::now();
-            break;
-        case ConnectionType::replace:
-            if (itr->second.socket != nullptr)
-                itr->second.socket->close(replaceSocket);
-            //itr->second.socket->close(replaceSocket);
-            itr->second.socket = socket;
-            itr->second.lastTry = chrono::system_clock::now();
-            break;
-        case ConnectionType::blackListCandidat:
-            if (itr->second.socket != nullptr)
-                itr->second.socket->close(replaceSocket);
-            itr->second.socket = socket;
-            itr->second.lastTry = chrono::system_clock::now();
-            if (++itr->second.blackListBehavior == 5)
-            {
-                toBlackList(itr);
-                return;
-            }
-    }
-    if (conType != ConnectionType::blackListCandidat && conType != ConnectionType::firstTime)
-        itr->second.blackListBehavior = 0;
+    // TODO: IP block
+    /* TODO: uncomment
     if (!_mapReceived.load())
     {
         socket->close(mapNotReceived);
         return;
     }
-    log(string("Client cnnt:") + " IP = " + addr +
-        " contype = " + to_string(static_cast<int>(conType)) +
-        " clients = " + to_string(_clientInfo.size()));
+    */
+    Header secWsProtocol = request.getHeader("sec-websocket-protocol");
+    string sessid(secWsProtocol.value, secWsProtocol.valueLength);
+    auto itr = _clientInfoSessid.find(sessid);
+    if (itr == _clientInfoSessid.end())
+    {
+        socket->close(invalidSessid);
+        return;
+    }
+    ClientInfo* clientInfo = itr->second;
+    if (clientInfo->socket)
+    {
+        clientInfo->socket->close(replaceSocket);
+        _clientInfoSocket.erase(clientInfo->socket);
+    }
+    clientInfo->socket = socket;
+    _clientInfoSocket.insert(pair(socket, clientInfo));
+    if (connectionSpammer(clientInfo))
+        return;
+    log(string("Client connected:") + " IP = " + socket->getAddress().address + " | nick = " + clientInfo->nick +
+        " | clients = " + to_string(_clientInfoSocket.size()));
     sendMap(socket);
 }
 
 void MessageServer::onClientDisconnection(USocket* socket, int code, char* message, size_t length)
 {
-    const char* addr = socket->getAddress().address;
-    unordered_map<string, ClientInfo>::iterator itr = _clientInfo.find(socket->getAddress().address);
-    if (itr != _clientInfo.end())
-        itr->second.socket = nullptr;
-    switch (code)
+    auto itr  = _clientInfoSocket.find(socket);
+    string logMessage("Client disconnected:");
+    if (itr != _clientInfoSocket.end())
     {
-        case replaceSocket:
-            log(string("Socket rplc: ") + "IP = " + addr);
-            break;
-        case blackList:
-            log(string("Blist member dsc: ") + "IP = " + addr);
-            break;
-        default:
-            log(string("Client dsc: code = ") + to_string(code) + " IP = " + addr +
-                " clients = " + to_string(_clientInfo.size()));
-            break;
+        itr->second->socket = nullptr;
+        logMessage += string(" nick = ") + itr->second->nick + " | sessid = " + itr->second->sessid;
+        _clientInfoSocket.erase(itr);
     }
+    logMessage += string(" | code = ") + to_string(code);
+    log(logMessage);
 }
 
-MessageServer::ConnectionType MessageServer::getConnectionType(unordered_map<string, ClientInfo>::iterator& itr)
+void MessageServer::onClientMessage(USocket* socket, char* message, size_t length, OpCode opCode)
 {
-    if (itr != _clientInfo.end())
-    {
-        if (since<deci>(itr->second.lastTry) < 100)
-            return ConnectionType::blackListCandidat;
-        if (itr->second.socket != nullptr)
-            return ConnectionType::replace;
-        return ConnectionType::reconnection;
-    }
-    return ConnectionType::firstTime;
+    auto itr = _clientInfoSocket.find(socket);
+    if (messageSpammer(itr->second) || !length)
+        return;
+    ClientMessageProcessor prc = CLIENT_MESSAGE_PROCESSOR[static_cast<unsigned char>(message[0])];
+    if (prc)
+        (this->*prc)(socket, message + 1, length - 1);
 }
 
-void MessageServer::toBlackList(unordered_map<string, ClientInfo>::iterator& itr)
+void MessageServer::processClientFollow(USocket* socket, char* data, size_t length)
 {
-    itr->second.socket->close(blackList);
-    _blackList.insert(pair<string, TimePoint>(itr->first, itr->second.lastTry));
-    _clientInfo.erase(itr);
+    // TODO:
+    // [c][nick] - character
+    // [p][x>y] - position
 }
 
-bool MessageServer::blackListMember(USocket* socket)
+void MessageServer::processClientPosition(USocket* socket, char* data, size_t length)
 {
-    unordered_map<string, TimePoint>::iterator itr = _blackList.find(socket->getAddress().address);
-    if (itr != _blackList.end())
-    {
-        if (since<deci>(itr->second) < 6000)
-            return true;
-        _blackList.erase(itr);
-    }
-    return false;
+    // TODO:
+}
+
+void MessageServer::sendBlockRequest(ClientInfo* clientInfo)
+{
+    // TODO:
 }

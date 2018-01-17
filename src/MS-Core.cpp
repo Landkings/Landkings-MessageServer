@@ -7,9 +7,17 @@ using namespace std;
 using namespace uWS;
 
 
-MessageServer::MessageServer() : _hub(HUBS), _loopRunning(HUBS), _threadTerminated(HUBS), _port(HUBS)
+MessageServer::MessageServer() : GAME_MESSAGE_PROCESSOR{}, WEB_MESSAGE_PROCESSOR{}, CLIENT_MESSAGE_PROCESSOR{},
+    _hub(HUBS), _loopRunning(HUBS), _threadTerminated(HUBS), _port(HUBS)
 {
-
+    // need array initialization like that {1, 2, [10] = 3, 4}
+    const_cast<MessageProcessor&>(GAME_MESSAGE_PROCESSOR['o']) = &MessageServer::processGameObjects;
+    const_cast<MessageProcessor&>(GAME_MESSAGE_PROCESSOR['m']) = &MessageServer::processGameMap;
+    const_cast<MessageProcessor&>(WEB_MESSAGE_PROCESSOR['l']) = &MessageServer::processWebClientLogin;
+    const_cast<MessageProcessor&>(WEB_MESSAGE_PROCESSOR['e']) = &MessageServer::processWebClientExit;
+    const_cast<MessageProcessor&>(WEB_MESSAGE_PROCESSOR['p']) = &MessageServer::processWebAddPlayer;
+    const_cast<ClientMessageProcessor&>(CLIENT_MESSAGE_PROCESSOR['f']) = &MessageServer::processClientFollow;
+    const_cast<ClientMessageProcessor&>(CLIENT_MESSAGE_PROCESSOR['p']) = &MessageServer::processClientPosition;
 }
 
 MessageServer::~MessageServer()
@@ -30,7 +38,7 @@ bool MessageServer::terminate()
         return true;
     }
     _termination.store(true);
-    if (_logThreadTerminated)
+    if (_logThreadTerminated.load())
     {
         _termination.store(false);
         return true;
@@ -43,20 +51,19 @@ bool MessageServer::terminate()
         terminateHub(i, callbacksStoped.data());
     while (!_logThreadTerminated.load())
         customSleep<milli>(10);
-    _log.close();
     _termination.store(false);
     return true;
 }
 
 void MessageServer::terminateHub(int i, Flag* callbacksStoped)
 {
-    auto eventLoopTermPost = [](Async* async)
+    auto termFunc = [](Async* async)
     {
         void* asyncData = async->getData();
-        Hub* h = getFromVoid<Hub*>(asyncData);
-        Flag* callbacksStoped = getFromVoid<Flag*>(asyncData, sizeof(Hub*));
+        Hub* h = voidGet<Hub*>(asyncData);
+        Flag* callbacksStoped = voidGet<Flag*>(asyncData, sizeof(Hub*));
         void* hubData = h->getDefaultGroup<SERVER>().getUserData();
-        int i = getFromVoid<int>(hubData + sizeof(MessageServer*));
+        int i = voidGet<int>(hubData + sizeof(MessageServer*));
         callbacksStoped[i].store(true);
         for (int i = 0; i < HUBS; ++i)
             if (!callbacksStoped[i])
@@ -68,20 +75,20 @@ void MessageServer::terminateHub(int i, Flag* callbacksStoped)
     };
     Async* async = new Async(_hub[i]->getLoop());
     void* data = malloc(sizeof(Hub*) + sizeof(Flag*));
-    putToVoid<Hub*>(data, _hub[i]);
-    putToVoid<Flag*>(data, callbacksStoped, sizeof(Hub*));
+    voidPut<Hub*>(data, _hub[i]);
+    voidPut<Flag*>(data, callbacksStoped, sizeof(Hub*));
     async->setData(data);
-    async->start(eventLoopTermPost);
+    async->start(termFunc);
     async->send();
 }
 
 void MessageServer::sleepHub(int i, Flag& sleeped, Flag& wake)
 {
-    auto eventLoopSleep = [](Async* async)
+    auto sleepFunc = [](Async* async)
     {
         void* data = async->getData();
-        Flag* sleeped = getFromVoid<Flag*>(data);
-        Flag* wake = getFromVoid<Flag*>(data + sizeof(Flag*));
+        Flag* sleeped = voidGet<Flag*>(data);
+        Flag* wake = voidGet<Flag*>(data + sizeof(Flag*));
         sleeped->store(true);
         while (!wake->load())
             customSleep<micro>(10);
@@ -90,10 +97,10 @@ void MessageServer::sleepHub(int i, Flag& sleeped, Flag& wake)
     };
     Async* async = new Async(_hub[i]->getLoop());
     void* data = malloc(2 * sizeof(Flag*));
-    putToVoid<Flag*>(data, &sleeped);
-    putToVoid<Flag*>(data, &wake, sizeof(Flag*));
+    voidPut<Flag*>(data, &sleeped);
+    voidPut<Flag*>(data, &wake, sizeof(Flag*));
     async->setData(data);
-    async->start(eventLoopSleep);
+    async->start(sleepFunc);
     async->send();
 }
 
@@ -102,7 +109,6 @@ void MessageServer::sleepHub(int i, Flag& sleeped, Flag& wake)
 void MessageServer::init()
 {
     getline(std::ifstream("secret.txt"), _secretMessage);
-    _log.open("message-server.log", ios_base::app);
     _termination = false;
     _serverConnected = false;
     _mapReceived = false;
@@ -114,39 +120,38 @@ void MessageServer::init()
         _threadTerminated[i] = false;
         _loopRunning[i] = false;
     }
-    _logCaptured = false;
     _loadedMap = "";
-    _logDeq.clear();
-    _clientInfo.clear();
     _outTraffic = 0;
 }
 
-void MessageServer::start(uint16_t serverPort, uint16_t webServerPort, uint16_t clientPort)
+void MessageServer::start(uint16_t gamePort, uint16_t webPort, uint16_t clientPort)
 {
-    _startPoint = chrono::time_point_cast<chrono::seconds>(chrono::system_clock::now());
     init();
+    _startPoint = chrono::time_point_cast<chrono::seconds>(chrono::system_clock::now());
+    log("Start");
     _port[client] = clientPort;
-    _port[server] = serverPort;
-    _port[webServer] = webServerPort;
+    _port[game] = gamePort;
+    _port[web] = webPort;
     thread(&MessageServer::logThreadFunction, this).detach();
     customSleep<milli>(100);
     thread(&MessageServer::clientThreadFunction, this, clientPort).detach();
     customSleep<milli>(100);
-    thread(&MessageServer::serverThreadFunction, this, serverPort).detach();
+    thread(&MessageServer::gameThreadFunction, this, gamePort).detach();
     customSleep<milli>(100);
-    thread(&MessageServer::webServerThreadFunction, this, webServerPort).detach();
+    thread(&MessageServer::webThreadFunction, this, webPort).detach();
     customSleep<milli>(100);
     for (int i = 0; i < HUBS; ++i)
         if (!_loopRunning[i].load())
             i = -1;
     customSleep<milli>(50);
+    log("Started");
     _started.store(true);
 }
 
 void MessageServer::restart()
 {
     terminate();
-    start(_port[server], _port[webServer], _port[client]);
+    start(_port[game], _port[web], _port[client]);
 }
 
 void MessageServer::logThreadFunction()
@@ -155,50 +160,47 @@ void MessageServer::logThreadFunction()
     while (true)
     {
         customSleep<milli>(LOG_INTERVAL);
-        while (_logCaptured.load()) // cmpxchng crash
-            customSleep<micro>(5);
-        _logCaptured.store(true);
-        printLogDeq();
-        _logCaptured.store(false);
-        if (_threadTerminated[server].load() && _threadTerminated[webServer].load() && _threadTerminated[client].load())
+        _log.flush();
+        if (_threadTerminated[game].load() && _threadTerminated[web].load() && _threadTerminated[client].load())
         {
             lastLog();
             log("Log thread terminated");
-            printLogDeq();
+            log("Terminated");
+            _log.flush();
             _logThreadTerminated.store(true);
             break;
         }
     }
 }
 
-void MessageServer::serverThreadFunction(uint16_t port)
+void MessageServer::gameThreadFunction(uint16_t port)
 {
     log("Server thread running");
-    _hub[server] = new Hub();
-    setGroupData(&_hub[server]->getDefaultGroup<SERVER>(), server);
-    setServerCallbacks();
-    _hub[server]->listen(port);
-    _loopRunning[server].store(true);
-    _hub[server]->run();
-    _threadTerminated[server].store(true);
-    free(_hub[server]->getDefaultGroup<SERVER>().getUserData());
-    delete _hub[server];
+    _hub[game] = new Hub();
+    setGroupData(&_hub[game]->getDefaultGroup<SERVER>(), game);
+    setGameCallbacks();
+    _hub[game]->listen(port);
+    _loopRunning[game].store(true);
+    _hub[game]->run();
+    free(_hub[game]->getDefaultGroup<SERVER>().getUserData());
+    delete _hub[game];
     log("Server thread terminated");
+    _threadTerminated[game].store(true);
 }
 
-void MessageServer::webServerThreadFunction(uint16_t port)
+void MessageServer::webThreadFunction(uint16_t port)
 {
     log("Web server thread running");
-    _hub[webServer] = new Hub();
-    setGroupData(&_hub[webServer]->getDefaultGroup<SERVER>(), webServer);
-    setWebServerCallbacks();
-    _hub[webServer]->listen(port);
-    _loopRunning[webServer].store(true);
-    _hub[webServer]->run();
-    _threadTerminated[webServer].store(true);
-    free(_hub[webServer]->getDefaultGroup<SERVER>().getUserData());
-    delete _hub[webServer];
+    _hub[web] = new Hub();
+    setGroupData(&_hub[web]->getDefaultGroup<SERVER>(), web);
+    setWebCallbacks();
+    _hub[web]->listen(port);
+    _loopRunning[web].store(true);
+    _hub[web]->run();
+    free(_hub[web]->getDefaultGroup<SERVER>().getUserData());
+    delete _hub[web];
     log("Web server thread terminated");
+    _threadTerminated[web].store(true);
 }
 
 void MessageServer::clientThreadFunction(uint16_t port)
@@ -210,17 +212,17 @@ void MessageServer::clientThreadFunction(uint16_t port)
     _hub[client]->listen(port);
     _loopRunning[client].store(true);
     _hub[client]->run();
-    _threadTerminated[client].store(true);
     free(_hub[client]->getDefaultGroup<SERVER>().getUserData());
     delete _hub[client];
     log("Client thread terminated");
+    _threadTerminated[client].store(true);
 }
 
 void MessageServer::setGroupData(UGroup* g, int i)
 {
     void* data = malloc(sizeof(MessageServer*) + sizeof(int));
-    putToVoid<MessageServer*>(data, this);
-    putToVoid<int>(data, i, sizeof(MessageServer*));
+    voidPut<MessageServer*>(data, this);
+    voidPut<int>(data, i, sizeof(MessageServer*));
     g->setUserData(data);
 }
 
@@ -228,33 +230,12 @@ void MessageServer::setGroupData(UGroup* g, int i)
 
 void MessageServer::log(const string& msg)
 {
-    stringstream buffer;
-    time_t t = time(nullptr);
-    tm* curTime = localtime(&t);
-    buffer << '('
-           << setfill('0') << setw(2) << curTime->tm_mday << 'd' << ' '
-           << setfill('0') << setw(2) << curTime->tm_hour << ':'
-           << setfill('0') << setw(2) << curTime->tm_min << ':'
-           << setfill('0') << setw(2) << curTime->tm_sec
-           << ')';
-    buffer << ' ' << msg << '\n';
-    while (_logCaptured.load()) // cmpxchng crash
-        customSleep<micro>(10);
-    _logCaptured.store(true);
-    _logDeq.push_back(buffer.str());
-    _logCaptured.store(false);
+    _log.write(msg);
 }
 
-void MessageServer::printLogDeq()
+void MessageServer::log(const char* msg)
 {
-    while (!_logDeq.empty())
-    {
-        cout << _logDeq[0];
-        _log << _logDeq[0];
-        _logDeq.pop_front();
-    }
-    cout.flush();
-    _log.flush();
+    _log.write(msg);
 }
 
 void MessageServer::lastLog()

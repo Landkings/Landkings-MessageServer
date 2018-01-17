@@ -17,8 +17,6 @@ void sigIntHandler(int)
 {
     if (mServerPtr->terminate())
         cout << "\nSuccess termination\n" << endl;
-    else
-        cout << "\n\nTerminated, server not start\n" << endl;
     exit(0);
 }
 
