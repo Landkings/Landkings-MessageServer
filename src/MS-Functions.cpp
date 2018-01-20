@@ -11,9 +11,9 @@ bool MessageServer::connectionSpammer(ClientInfo* clientInfo)
     {
         if (++clientInfo->frqConnectionCounter == 5)
         {
-            // TODO: send http block
+            sendBanRequest(clientInfo, 60);
             eraseClientInfo(clientInfo);
-            clientInfo->socket->close(blockRequestSended);
+            clientInfo->socket->close(banRequestSended);
             return true;
         }
     }
@@ -30,9 +30,9 @@ bool MessageServer::messageSpammer(ClientInfo* clientInfo)
     {
         if (++clientInfo->frqMessageCounter == 15)
         {
-            // TODO: send http block
+            sendBanRequest(clientInfo, 10);
             eraseClientInfo(clientInfo);
-            clientInfo->socket->close(blockRequestSended);
+            clientInfo->socket->close(banRequestSended);
             return true;
         }
     }

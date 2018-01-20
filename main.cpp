@@ -5,6 +5,8 @@
 
 #include <boost/program_options.hpp>
 
+#include <curlpp/cURLpp.hpp>
+
 #include "MS.hpp"
 
 using namespace std;
@@ -79,6 +81,7 @@ int main(int argc, char** argv)
             }
     }
     //*********************
+    curlpp::initialize();
     MessageServer mServer;
     mServerPtr = &mServer;
     setSigIntHandler();

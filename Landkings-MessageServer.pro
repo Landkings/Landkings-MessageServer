@@ -8,11 +8,11 @@ QMAKE_CXXFLAGS_WARN_ON += -Wno-unused-parameter -Wno-maybe-uninitialized -Wno-po
 
 QMAKE_CXXFLAGS += -DUSE_ASIO
 
-INCLUDEPATH += $$PWD/include $$PWD/lib
+INCLUDEPATH += $$PWD/include
 
 SOURCES += main.cpp $$PWD/src/*.cpp
 
 HEADERS += $$PWD/include/*.hpp $$PWD/include/*.h
 
-LIBS += -L/usr/lib/x86_64-linux-gnu \
--luWS -lssl -lpthread -lz  -lboost_program_options -lboost_system -lcurl
+LIBS += -L/usr/lib/x86_64-linux-gnu -L/usr/local/lib/curlpp \
+-luWS -lssl -lpthread -lz  -lboost_program_options -lboost_system -lcurlpp -lcurl

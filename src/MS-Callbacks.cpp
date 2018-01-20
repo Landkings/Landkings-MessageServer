@@ -4,6 +4,9 @@
 #include <string_view>
 
 #include <curlpp/cURLpp.hpp>
+#include <curlpp/Easy.hpp>
+#include <curlpp/Options.hpp>
+#include <curlpp/Exception.hpp>
 
 using namespace std;
 using namespace uWS;
@@ -22,7 +25,7 @@ void MessageServer::onGameConnection(USocket* socket, HttpRequest request)
     _gameSocket = socket;
     sendAcceptConnection();
     _serverConnected.store(true);
-    log("Server connected");
+    _log.write("Server connected");
     return;
 CloseSocket:
     socket->close();
@@ -32,7 +35,7 @@ void MessageServer::onGameDisconnetion(USocket* socket, int code, char* message,
 {
     if (socket != _gameSocket)
         return;
-    log(string("Server disconneted:") + " code = " + to_string(code));
+    _log.write(string("Server disconneted:") + " code = " + to_string(code));
     _serverConnected.store(false);
     _mapReceived.store(false);
 }
@@ -48,7 +51,7 @@ void MessageServer::processGameMap(char* message, size_t length)
 {
     _loadedMap.assign(message, length);
     _mapReceived.store(true);
-    log("Map loaded");
+    _log.write("Map loaded");
 }
 
 void MessageServer::processGameObjects(char* message, size_t length)
@@ -56,8 +59,8 @@ void MessageServer::processGameObjects(char* message, size_t length)
     static unsigned long objectsCounter = 0;
     if (objectsCounter % 1000 == 0)
     {
-        log("Objects loaded");
-        log(string("Broadcasted:\n") + string(message, length));
+        _log.write("Objects loaded");
+        _log.write(string("Broadcasted:\n") + string(message, length));
     }
     ++objectsCounter;
     if (!_objectsSending.load())
@@ -67,7 +70,7 @@ void MessageServer::processGameObjects(char* message, size_t length)
         _objectsSending.store(false);
     }
     else
-        log("Last objects pack not sent yet");
+        _log.write("Last objects pack not sent yet");
 }
 
 void MessageServer::injectObjectsSending(const char* message, size_t length)
@@ -120,11 +123,11 @@ void MessageServer::onWebHttpRequest(HttpResponse* response, HttpRequest request
 void MessageServer::processWebClientLogin(char* data, size_t length)
 {
     // l[nick]>[sessid]
-    log(string("Client login:"));
     string_view dataView(data, length);
     size_t nlIdx = dataView.find_first_of('>');
     string nick(dataView.substr(0, nlIdx));
     string sessid(dataView.substr(nlIdx + 1));
+    _log.write(string("Client login:") + " nick = " + nick + " | sessid = " + sessid);
     auto itr = _clientInfoNick.find(nick);
     if (itr == _clientInfoNick.end())
     {
@@ -143,15 +146,16 @@ void MessageServer::processWebClientLogin(char* data, size_t length)
 void MessageServer::processWebClientExit(char* data, size_t length)
 {
     // e[nick]
-    log(string("Client exit:"));
     ClientInfo* clientInfo = _clientInfoNick[string(data, length)];
+    _log.write(string("Client exit:") + " nick = " + clientInfo->nick);
     _clientInfoSessid.erase(clientInfo->sessid);
 }
 
 void MessageServer::processWebAddPlayer(char* data, size_t length)
 {
     // p[nick]>[code]
-    log(string("New character:"));
+    string_view dataView(data);
+    _log.write(string("New character:") + " nick = " + string(data, dataView.find_first_of('>')));
     socketSend(_gameSocket, data - 1, length + 1);
 }
 
@@ -161,13 +165,11 @@ void MessageServer::processWebAddPlayer(char* data, size_t length)
 void MessageServer::onClientConnection(USocket* socket, HttpRequest request)
 {
     // TODO: IP block
-    /* TODO: uncomment
     if (!_mapReceived.load())
     {
         socket->close(mapNotReceived);
         return;
     }
-    */
     Header secWsProtocol = request.getHeader("sec-websocket-protocol");
     string sessid(secWsProtocol.value, secWsProtocol.valueLength);
     auto itr = _clientInfoSessid.find(sessid);
@@ -186,7 +188,7 @@ void MessageServer::onClientConnection(USocket* socket, HttpRequest request)
     _clientInfoSocket.insert(pair(socket, clientInfo));
     if (connectionSpammer(clientInfo))
         return;
-    log(string("Client connected:") + " IP = " + socket->getAddress().address + " | nick = " + clientInfo->nick +
+    _log.write(string("Client connected:") + " IP = " + socket->getAddress().address + " | nick = " + clientInfo->nick +
         " | clients = " + to_string(_clientInfoSocket.size()));
     sendMap(socket);
 }
@@ -202,7 +204,7 @@ void MessageServer::onClientDisconnection(USocket* socket, int code, char* messa
         _clientInfoSocket.erase(itr);
     }
     logMessage += string(" | code = ") + to_string(code);
-    log(logMessage);
+    _log.write(logMessage);
 }
 
 void MessageServer::onClientMessage(USocket* socket, char* message, size_t length, OpCode opCode)
@@ -218,16 +220,22 @@ void MessageServer::onClientMessage(USocket* socket, char* message, size_t lengt
 void MessageServer::processClientFollow(USocket* socket, char* data, size_t length)
 {
     // TODO:
-    // [c][nick] - character
-    // [p][x>y] - position
+    // f[nick] - follow
 }
 
 void MessageServer::processClientPosition(USocket* socket, char* data, size_t length)
 {
     // TODO:
+    // p[x]>[y] - position
 }
 
-void MessageServer::sendBlockRequest(ClientInfo* clientInfo)
+void MessageServer::sendBanRequest(ClientInfo* clientInfo, unsigned time)
 {
-    // TODO:
+    using namespace curlpp::options;
+
+    curlpp::Cleanup cleaner;
+    curlpp::Easy request;
+    request.setOpt(new Url("TODO: ban URL"));
+    request.setOpt(new PostFields(_secretMessage + clientInfo->nick + ">" + to_string(time)));
+    request.perform();
 }

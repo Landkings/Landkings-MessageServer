@@ -43,7 +43,7 @@ bool MessageServer::terminate()
         _termination.store(false);
         return true;
     }
-    log("Termination");
+    _log.write("Termination");
     vector<Flag> callbacksStoped(HUBS);
     for (unsigned i = 0; i < HUBS; ++i)
         callbacksStoped[i] = false;
@@ -128,7 +128,7 @@ void MessageServer::start(uint16_t gamePort, uint16_t webPort, uint16_t clientPo
 {
     init();
     _startPoint = chrono::time_point_cast<chrono::seconds>(chrono::system_clock::now());
-    log("Start");
+    _log.write("Start");
     _port[client] = clientPort;
     _port[game] = gamePort;
     _port[web] = webPort;
@@ -144,7 +144,7 @@ void MessageServer::start(uint16_t gamePort, uint16_t webPort, uint16_t clientPo
         if (!_loopRunning[i].load())
             i = -1;
     customSleep<milli>(50);
-    log("Started");
+    _log.write("Started");
     _started.store(true);
 }
 
@@ -156,7 +156,7 @@ void MessageServer::restart()
 
 void MessageServer::logThreadFunction()
 {
-    log("Log thread running");
+    _log.write("Log thread running");
     while (true)
     {
         customSleep<milli>(LOG_INTERVAL);
@@ -164,8 +164,8 @@ void MessageServer::logThreadFunction()
         if (_threadTerminated[game].load() && _threadTerminated[web].load() && _threadTerminated[client].load())
         {
             lastLog();
-            log("Log thread terminated");
-            log("Terminated");
+            _log.write("Log thread terminated");
+            _log.write("Terminated");
             _log.flush();
             _logThreadTerminated.store(true);
             break;
@@ -175,7 +175,7 @@ void MessageServer::logThreadFunction()
 
 void MessageServer::gameThreadFunction(uint16_t port)
 {
-    log("Server thread running");
+    _log.write("Server thread running");
     _hub[game] = new Hub();
     setGroupData(&_hub[game]->getDefaultGroup<SERVER>(), game);
     setGameCallbacks();
@@ -184,13 +184,13 @@ void MessageServer::gameThreadFunction(uint16_t port)
     _hub[game]->run();
     free(_hub[game]->getDefaultGroup<SERVER>().getUserData());
     delete _hub[game];
-    log("Server thread terminated");
+    _log.write("Server thread terminated");
     _threadTerminated[game].store(true);
 }
 
 void MessageServer::webThreadFunction(uint16_t port)
 {
-    log("Web server thread running");
+    _log.write("Web server thread running");
     _hub[web] = new Hub();
     setGroupData(&_hub[web]->getDefaultGroup<SERVER>(), web);
     setWebCallbacks();
@@ -199,13 +199,13 @@ void MessageServer::webThreadFunction(uint16_t port)
     _hub[web]->run();
     free(_hub[web]->getDefaultGroup<SERVER>().getUserData());
     delete _hub[web];
-    log("Web server thread terminated");
+    _log.write("Web server thread terminated");
     _threadTerminated[web].store(true);
 }
 
 void MessageServer::clientThreadFunction(uint16_t port)
 {
-    log("Client thread running");
+    _log.write("Client thread running");
     _hub[client] = new Hub();
     setGroupData(&_hub[client]->getDefaultGroup<SERVER>(), client);
     setClientCallbacks();
@@ -214,7 +214,7 @@ void MessageServer::clientThreadFunction(uint16_t port)
     _hub[client]->run();
     free(_hub[client]->getDefaultGroup<SERVER>().getUserData());
     delete _hub[client];
-    log("Client thread terminated");
+    _log.write("Client thread terminated");
     _threadTerminated[client].store(true);
 }
 
@@ -226,23 +226,11 @@ void MessageServer::setGroupData(UGroup* g, int i)
     g->setUserData(data);
 }
 
-// *** LOG ***
-
-void MessageServer::log(const string& msg)
-{
-    _log.write(msg);
-}
-
-void MessageServer::log(const char* msg)
-{
-    _log.write(msg);
-}
-
 void MessageServer::lastLog()
 {
     int64_t uptime = chrono::duration_cast<chrono::seconds>(chrono::system_clock::now() - _startPoint).count();
     if (uptime == 0)
         return;
-    log(string("Uptime: ") + to_string(uptime) + " sec");
-    log(string("Out traffic: " + to_string(_outTraffic)) + " bytes" + " - " + to_string(_outTraffic / uptime) + " b/s");
+    _log.write(string("Uptime: ") + to_string(uptime) + " sec");
+    _log.write(string("Out traffic: " + to_string(_outTraffic)) + " bytes" + " - " + to_string(_outTraffic / uptime) + " b/s");
 }

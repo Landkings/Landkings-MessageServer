@@ -48,6 +48,7 @@ private:
         unsigned frqMessageCounter;
     };
 
+    /*
     struct ClientCamera
     {
         enum CameraType
@@ -62,13 +63,14 @@ private:
             {
                 int x;
                 int y;
-            };
-        };
+            } pos;
+        } cam;
     };
+    */
 
     enum CloseCode
     {
-        replaceSocket = 4001, invalidSessid, blockRequestSended, mapNotReceived = 4100, termination
+        replaceSocket = 4001, invalidSessid, banRequestSended, mapNotReceived = 4100, termination
     };
 
     enum HubID
@@ -99,7 +101,7 @@ private:
     std::unordered_map<std::string, ClientInfo*> _clientInfoSessid;
     std::unordered_map<std::string, ClientInfo*> _clientInfoNick;
 
-    std::unordered_map<std::string, ClientCamera> _clientCamera;
+    //std::unordered_map<std::string, ClientCamera> _clientCamera;
 
     Flag _serverConnected;
     Flag _mapReceived;
@@ -129,9 +131,6 @@ private:
     void init();
     void restart();
 
-    void log(const std::string& msg);
-    void log(const char* msg);
-
     // *** CALLBACKS ***
     void onGameConnection(USocket* socket, uWS::HttpRequest request);
     void onGameDisconnetion(USocket* socket, int code, char* message, size_t length);
@@ -153,8 +152,8 @@ private:
     bool messageSpammer(ClientInfo* clientInfo);
     bool connectionSpammer(ClientInfo* clientInfo);
     void eraseClientInfo(ClientInfo* clientInfo);
+    void sendBanRequest(ClientInfo* clientInfo, unsigned time);
 
-    void sendBlockRequest(ClientInfo* clientInfo);
     // *** FUNCTIONS ***
     void injectObjectsSending(const char* message, size_t length);
     void sendAcceptConnection();
