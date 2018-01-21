@@ -14,6 +14,7 @@ public:
     Log(const Log&) = delete;
     Log(Log&&) = delete;
     void write(const std::string&);
+    void write(const std::string_view&);
     void write(const char*);
     void flush();
 private:

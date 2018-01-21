@@ -111,6 +111,7 @@ void MessageServer::onWebHttpRequest(HttpResponse* response, HttpRequest request
     // [secret][messageType][message]
     static const string errResponse("HTTP/1.1 500 Internal Server Error\nContent-Length: 0\nConnection: closed\n\n");
     static const string okResponse("HTTP/1.1 200 OK\nContent-Length: 0\nConnection: closed\n\n");
+    _log.write(string("Http req data:") + " " + string(data, length));
     if (length < _secretMessage.length() || strncmp(_secretMessage.data(), data, _secretMessage.length()))
         return;
     MessageProcessor prc = WEB_MESSAGE_PROCESSOR[static_cast<unsigned char>(data[_secretMessage.length()])];
@@ -151,8 +152,11 @@ void MessageServer::processWebClientLogout(char* data, size_t length)
     // e[nick]
     acquireFlag<nano>(_clientInfoAcquired, 1);
     ClientInfo* clientInfo = _clientInfoNick[string(data, length)];
-    _log.write(string("Client logout:") + " nick = " + clientInfo->nick);
-    _clientInfoSessid.erase(clientInfo->sessid);
+    if (clientInfo)
+    {
+        _log.write(string("Client logout:") + " nick = " + clientInfo->nick);
+        _clientInfoSessid.erase(clientInfo->sessid);
+    }
     releaseFlag(_clientInfoAcquired);
 }
 

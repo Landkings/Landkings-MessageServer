@@ -25,7 +25,17 @@ Log::Log(const string& fname, bool& opened) : _fileStream(fname, ios_base::app),
     opened = true;
 }
 
-void Log::write(const std::string& message)
+void Log::write(const string& message)
+{
+    acquire();
+    putTime();
+    memcpy(&_block[_curBlockPos], message.data(), message.length() * sizeof(char));
+    _block[_curBlockPos + message.length()] = '\n';
+    _curBlockPos += (message.length() + 1) * sizeof(char);
+    release();
+}
+
+void Log::write(const string_view& message)
 {
     acquire();
     putTime();
