@@ -151,9 +151,10 @@ void MessageServer::processWebClientLogout(char* data, size_t length)
 {
     // e[nick]
     acquireFlag<nano>(_clientInfoAcquired, 1);
-    ClientInfo* clientInfo = _clientInfoNick[string(data, length)];
-    if (clientInfo)
+    auto itr = _clientInfoNick.find(string(data, length));
+    if (itr != _clientInfoNick.end())
     {
+        ClientInfo* clientInfo = itr->second;
         _log.write(string("Client logout:") + " nick = " + clientInfo->nick);
         _clientInfoSessid.erase(clientInfo->sessid);
     }
@@ -248,10 +249,10 @@ void MessageServer::processClientPosition(USocket* socket, char* data, size_t le
 
 void MessageServer::sendBanRequest(ClientInfo* clientInfo, unsigned time)
 {
-    //using namespace curlpp::options;
-    return;
     // TODO: uncomment
     /*
+    using namespace curlpp::options;
+
     curlpp::Cleanup cleaner;
     curlpp::Easy request;
     request.setOpt(new Url("TODO: ban URL"));
