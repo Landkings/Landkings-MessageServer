@@ -186,6 +186,7 @@ void MessageServer::onClientConnection(USocket* socket, HttpRequest request)
     if (itr == _clientInfoSessid.end())
     {
         socket->close(invalidSessid);
+        releaseFlag(_clientInfoAcquired);
         return;
     }
     ClientInfo* clientInfo = itr->second;
@@ -197,7 +198,10 @@ void MessageServer::onClientConnection(USocket* socket, HttpRequest request)
     clientInfo->socket = socket;
     _clientInfoSocket.insert(pair(socket, clientInfo));
     if (connectionSpammer(clientInfo))
+    {
+        releaseFlag(_clientInfoAcquired);
         return;
+    }
     _log.write(string("Client connected:") + " IP = " + socket->getAddress().address + " | nick = " + clientInfo->nick +
         " | clients = " + to_string(_clientInfoSocket.size()));
     releaseFlag(_clientInfoAcquired);
