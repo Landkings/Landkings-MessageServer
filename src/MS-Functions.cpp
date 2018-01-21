@@ -6,6 +6,8 @@ using namespace uWS;
 
 bool MessageServer::connectionSpammer(ClientInfo* clientInfo)
 {
+    // TODO: uncomment
+    /*
     TimePoint cur = chrono::system_clock::now();
     if (since<One>(clientInfo->lastConnection, cur) < 5)
     {
@@ -20,11 +22,14 @@ bool MessageServer::connectionSpammer(ClientInfo* clientInfo)
     else
         clientInfo->frqConnectionCounter = 0;
     clientInfo->lastConnection = cur;
+    */
     return false;
 }
 
 bool MessageServer::messageSpammer(ClientInfo* clientInfo)
 {
+    // TODO: uncomment
+    /*
     TimePoint cur = chrono::system_clock::now();
     if (since<deci>(clientInfo->lastMessage, cur) < 15)
     {
@@ -39,6 +44,7 @@ bool MessageServer::messageSpammer(ClientInfo* clientInfo)
     else
         clientInfo->frqMessageCounter = 0;
     clientInfo->lastMessage = cur;
+    */
     return false;
 }
 

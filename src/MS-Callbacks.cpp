@@ -232,10 +232,13 @@ void MessageServer::processClientPosition(USocket* socket, char* data, size_t le
 void MessageServer::sendBanRequest(ClientInfo* clientInfo, unsigned time)
 {
     using namespace curlpp::options;
-
+    return;
+    // TODO: uncomment
+    /*
     curlpp::Cleanup cleaner;
     curlpp::Easy request;
     request.setOpt(new Url("TODO: ban URL"));
     request.setOpt(new PostFields(_secretMessage + clientInfo->nick + ">" + to_string(time)));
     request.perform();
+    */
 }

@@ -51,6 +51,9 @@ bool MessageServer::terminate()
         terminateHub(i, callbacksStoped.data());
     while (!_logThreadTerminated.load())
         customSleep<milli>(10);
+    lastLog();
+    _log.write("Terminated");
+    _log.flush();
     _termination.store(false);
     return true;
 }
@@ -120,7 +123,6 @@ void MessageServer::init()
         _threadTerminated[i] = false;
         _loopRunning[i] = false;
     }
-    _loadedMap = "";
     _outTraffic = 0;
 }
 
@@ -162,15 +164,11 @@ void MessageServer::logThreadFunction()
         customSleep<milli>(LOG_INTERVAL);
         _log.flush();
         if (_threadTerminated[game].load() && _threadTerminated[web].load() && _threadTerminated[client].load())
-        {
-            lastLog();
-            _log.write("Log thread terminated");
-            _log.write("Terminated");
-            _log.flush();
-            _logThreadTerminated.store(true);
             break;
-        }
     }
+    _log.write("Log thread terminated");
+    _log.flush();
+    _logThreadTerminated.store(true);
 }
 
 void MessageServer::gameThreadFunction(uint16_t port)
@@ -228,7 +226,7 @@ void MessageServer::setGroupData(UGroup* g, int i)
 
 void MessageServer::lastLog()
 {
-    int64_t uptime = chrono::duration_cast<chrono::seconds>(chrono::system_clock::now() - _startPoint).count();
+    int64_t uptime = since<One>(_startPoint);
     if (uptime == 0)
         return;
     _log.write(string("Uptime: ") + to_string(uptime) + " sec");

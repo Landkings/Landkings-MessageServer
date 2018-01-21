@@ -15,4 +15,4 @@ SOURCES += main.cpp $$PWD/src/*.cpp
 HEADERS += $$PWD/include/*.hpp $$PWD/include/*.h
 
 LIBS += -L/usr/lib/x86_64-linux-gnu -L/usr/local/lib/curlpp \
--luWS -lssl -lpthread -lz  -lboost_program_options -lboost_system -lcurlpp -lcurl
+-luWS -lssl -lpthread -lz  -lboost_program_options -lboost_system #-lcurlpp -lcurl

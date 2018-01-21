@@ -81,7 +81,7 @@ int main(int argc, char** argv)
             }
     }
     //*********************
-    curlpp::initialize();
+    // TODO: uncomment curlpp::initialize();
     MessageServer mServer;
     mServerPtr = &mServer;
     setSigIntHandler();
