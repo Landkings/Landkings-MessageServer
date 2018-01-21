@@ -175,24 +175,28 @@ void MessageServer::processWebAddPlayer(char* data, size_t length)
 void MessageServer::onClientConnection(USocket* socket, HttpRequest request)
 {
     // TODO: IP block
+    /*
     if (!_mapReceived.load())
     {
         socket->close(mapNotReceived);
         return;
     }
+    */
     Header secWsProtocol = request.getHeader("sec-websocket-protocol");
     string sessid(secWsProtocol.value, secWsProtocol.valueLength);
     acquireFlag<nano>(_clientInfoAcquired, 1);
+    socket->setUserData(reinterpret_cast<void*>(acquiredByClientThread));
     auto itr = _clientInfoSessid.find(sessid);
     if (itr == _clientInfoSessid.end())
     {
-        releaseFlag(_clientInfoAcquired);
         socket->close(invalidSessid);
+        releaseFlag(_clientInfoAcquired);
         return;
     }
     ClientInfo* clientInfo = itr->second;
     if (clientInfo->socket)
     {
+        clientInfo->socket->setUserData(reinterpret_cast<void*>(acquiredByClientThread));
         clientInfo->socket->close(replaceSocket);
         _clientInfoSocket.erase(clientInfo->socket);
     }
@@ -205,13 +209,15 @@ void MessageServer::onClientConnection(USocket* socket, HttpRequest request)
     }
     _log.write(string("Client connected:") + " IP = " + socket->getAddress().address + " | nick = " + clientInfo->nick +
         " | clients = " + to_string(_clientInfoSocket.size()));
+    socket->setUserData(nullptr);
     releaseFlag(_clientInfoAcquired);
     sendMap(socket);
 }
 
 void MessageServer::onClientDisconnection(USocket* socket, int code, char* message, size_t length)
 {
-    acquireFlag<nano>(_clientInfoAcquired, 1);
+    if (socket->getUserData() != reinterpret_cast<void*>(acquiredByClientThread))
+        acquireFlag<nano>(_clientInfoAcquired, 1);
     auto itr  = _clientInfoSocket.find(socket);
     string logMessage("Client disconnected:");
     if (itr != _clientInfoSocket.end())
@@ -220,7 +226,8 @@ void MessageServer::onClientDisconnection(USocket* socket, int code, char* messa
         logMessage += string(" nick = ") + itr->second->nick + " | sessid = " + itr->second->sessid;
         _clientInfoSocket.erase(itr);
     }
-    releaseFlag(_clientInfoAcquired);
+    if (socket->getUserData() != reinterpret_cast<void*>(acquiredByClientThread))
+        releaseFlag(_clientInfoAcquired);
     logMessage += string(" | code = ") + to_string(code);
     _log.write(logMessage);
 }

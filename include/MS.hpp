@@ -78,6 +78,10 @@ private:
         game = 0, web, client
     };
 
+    enum SocketUserData
+    {
+        clear = 0, acquiredByClientThread
+    };
 
     static const int HUBS = 3;
 
