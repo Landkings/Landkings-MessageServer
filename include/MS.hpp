@@ -181,6 +181,11 @@ private:
             customSleep<T>(interval);
         }
     }
+    static bool cmpxchng(Flag& flag, bool val = true)
+    {
+        bool cur;
+        return flag.compare_exchange_strong(cur, val);
+    }
     template<typename T>
     inline static int64_t since(TimePoint& point, const TimePoint& cur = std::chrono::system_clock::now())
     {

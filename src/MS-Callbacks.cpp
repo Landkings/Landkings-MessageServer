@@ -27,7 +27,7 @@ void MessageServer::onGameConnection(USocket* socket, HttpRequest request)
     _gameSocket = socket;
     sendAcceptConnection();
     _serverConnected.store(true);
-    _log.write("Server connected");
+    _log.write("Game server connected");
     return;
 CloseSocket:
     socket->close();
@@ -59,15 +59,13 @@ void MessageServer::processGameMap(char* message, size_t length)
 void MessageServer::processGameObjects(char* message, size_t length)
 {
     static unsigned long objectsCounter = 0;
-    if (objectsCounter % 1000 == 0)
+    if (++objectsCounter % 1000 == 1)
     {
         _log.write("Objects loaded");
         _log.write(string("Broadcasted:\n") + string(message, length));
     }
-    ++objectsCounter;
-    if (!_objectsSending.load())
+    if (cmpxchng(_objectsSending))
     {
-        _objectsSending.store(true);
         injectObjectsSending(message, length);
         _objectsSending.store(false);
     }
@@ -111,14 +109,14 @@ void MessageServer::injectObjectsSending(const char* message, size_t length)
 void MessageServer::onWebHttpRequest(HttpResponse* response, HttpRequest request, char* data, size_t length, size_t remainingBytes)
 {
     // [secret][messageType][message]
-    static const string httpErrStr("HTTP/1.1 500 Internal Server Error\nContent-Length: 0\nConnection: closed\n\n");
-    static const string httpOkStr("HTTP/1.1 200 OK\nContent-Length: 0\nConnection: closed\n\n");
+    static const string errResponse("HTTP/1.1 500 Internal Server Error\nContent-Length: 0\nConnection: closed\n\n");
+    static const string okResponse("HTTP/1.1 200 OK\nContent-Length: 0\nConnection: closed\n\n");
     if (length < _secretMessage.length() || strncmp(_secretMessage.data(), data, _secretMessage.length()))
         return;
     MessageProcessor prc = WEB_MESSAGE_PROCESSOR[static_cast<unsigned char>(data[_secretMessage.length()])];
     if (prc)
         (this->*prc)(data + _secretMessage.length() + 1, length - _secretMessage.length() - 1);
-    response->write(httpOkStr.data(), httpOkStr.length());
+    response->write(okResponse.data(), okResponse.length());
     response->end();
 }
 
