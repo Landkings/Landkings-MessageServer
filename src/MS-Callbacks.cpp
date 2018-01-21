@@ -177,6 +177,7 @@ void MessageServer::onClientConnection(USocket* socket, HttpRequest request)
     if (!_mapReceived.load())
     {
         socket->close(mapNotReceived);
+        releaseFlag(_clientInfoAcquired);
         return;
     }
     Header secWsProtocol = request.getHeader("sec-websocket-protocol");
