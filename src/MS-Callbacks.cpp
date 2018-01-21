@@ -2,11 +2,13 @@
 
 #include <random>
 #include <string_view>
-
+/*
+ * TODO: uncomment
 #include <curlpp/cURLpp.hpp>
 #include <curlpp/Easy.hpp>
 #include <curlpp/Options.hpp>
 #include <curlpp/Exception.hpp>
+*/
 
 using namespace std;
 using namespace uWS;
@@ -109,8 +111,8 @@ void MessageServer::injectObjectsSending(const char* message, size_t length)
 void MessageServer::onWebHttpRequest(HttpResponse* response, HttpRequest request, char* data, size_t length, size_t remainingBytes)
 {
     // [secret][messageType][message]
-    static const string httpErrStr("HTTP/1.1 500 Internal Server Error\nContent-Length: 0\nConnection: closed\n\n\n");
-    static const string httpOkStr("HTTP/1.1 200 OK\nContent-Length: 0\nConnection: closed\n\n\n");
+    static const string httpErrStr("HTTP/1.1 500 Internal Server Error\nContent-Length: 0\nConnection: closed\n\n");
+    static const string httpOkStr("HTTP/1.1 200 OK\nContent-Length: 0\nConnection: closed\n\n");
     if (length < _secretMessage.length() || strncmp(_secretMessage.data(), data, _secretMessage.length()))
         return;
     MessageProcessor prc = WEB_MESSAGE_PROCESSOR[static_cast<unsigned char>(data[_secretMessage.length()])];
@@ -128,12 +130,14 @@ void MessageServer::processWebClientLogin(char* data, size_t length)
     string nick(dataView.substr(0, nlIdx));
     string sessid(dataView.substr(nlIdx + 1));
     _log.write(string("Client login:") + " nick = " + nick + " | sessid = " + sessid);
+    acquireFlag<nano>(_clientInfoAcquired, 1);
     auto itr = _clientInfoNick.find(nick);
     if (itr == _clientInfoNick.end())
     {
         ClientInfo* clientInfo = new ClientInfo(nick, sessid);
         _clientInfoNick[nick] = clientInfo;
         _clientInfoSessid[sessid] = clientInfo;
+        releaseFlag(_clientInfoAcquired);
         return;
     }
     ClientInfo* clientInfo = itr->second;
@@ -141,14 +145,17 @@ void MessageServer::processWebClientLogin(char* data, size_t length)
     _clientInfoSessid.insert(pair(sessid, clientInfo));
     clientInfo->sessid = sessid;
     clientInfo->frqConnectionCounter = 0;
+    releaseFlag(_clientInfoAcquired);
 }
 
-void MessageServer::processWebClientExit(char* data, size_t length)
+void MessageServer::processWebClientLogout(char* data, size_t length)
 {
     // e[nick]
+    acquireFlag<nano>(_clientInfoAcquired, 1);
     ClientInfo* clientInfo = _clientInfoNick[string(data, length)];
-    _log.write(string("Client exit:") + " nick = " + clientInfo->nick);
+    _log.write(string("Client logout:") + " nick = " + clientInfo->nick);
     _clientInfoSessid.erase(clientInfo->sessid);
+    releaseFlag(_clientInfoAcquired);
 }
 
 void MessageServer::processWebAddPlayer(char* data, size_t length)
@@ -172,6 +179,7 @@ void MessageServer::onClientConnection(USocket* socket, HttpRequest request)
     }
     Header secWsProtocol = request.getHeader("sec-websocket-protocol");
     string sessid(secWsProtocol.value, secWsProtocol.valueLength);
+    acquireFlag<nano>(_clientInfoAcquired, 1);
     auto itr = _clientInfoSessid.find(sessid);
     if (itr == _clientInfoSessid.end())
     {
@@ -190,11 +198,13 @@ void MessageServer::onClientConnection(USocket* socket, HttpRequest request)
         return;
     _log.write(string("Client connected:") + " IP = " + socket->getAddress().address + " | nick = " + clientInfo->nick +
         " | clients = " + to_string(_clientInfoSocket.size()));
+    releaseFlag(_clientInfoAcquired);
     sendMap(socket);
 }
 
 void MessageServer::onClientDisconnection(USocket* socket, int code, char* message, size_t length)
 {
+    acquireFlag<nano>(_clientInfoAcquired, 1);
     auto itr  = _clientInfoSocket.find(socket);
     string logMessage("Client disconnected:");
     if (itr != _clientInfoSocket.end())
@@ -203,6 +213,7 @@ void MessageServer::onClientDisconnection(USocket* socket, int code, char* messa
         logMessage += string(" nick = ") + itr->second->nick + " | sessid = " + itr->second->sessid;
         _clientInfoSocket.erase(itr);
     }
+    releaseFlag(_clientInfoAcquired);
     logMessage += string(" | code = ") + to_string(code);
     _log.write(logMessage);
 }
@@ -231,7 +242,7 @@ void MessageServer::processClientPosition(USocket* socket, char* data, size_t le
 
 void MessageServer::sendBanRequest(ClientInfo* clientInfo, unsigned time)
 {
-    using namespace curlpp::options;
+    //using namespace curlpp::options;
     return;
     // TODO: uncomment
     /*

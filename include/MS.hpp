@@ -94,9 +94,9 @@ private:
     std::vector<Flag> _loopRunning;
     std::vector<Flag> _threadTerminated;
     std::vector<uint16_t> _port;
-
     USocket* _gameSocket;
 
+    Flag _clientInfoAcquired;
     std::unordered_map<USocket*, ClientInfo*> _clientInfoSocket; // 3 ptrs - 1 struct
     std::unordered_map<std::string, ClientInfo*> _clientInfoSessid;
     std::unordered_map<std::string, ClientInfo*> _clientInfoNick;
@@ -140,7 +140,7 @@ private:
 
     void onWebHttpRequest(uWS::HttpResponse* response, uWS::HttpRequest request, char *data, size_t length, size_t remainingBytes);
     void processWebClientLogin(char* data, size_t length);
-    void processWebClientExit(char* data, size_t length);
+    void processWebClientLogout(char* data, size_t length);
     void processWebAddPlayer(char* data, size_t length);
 
     void onClientConnection(USocket* socket, uWS::HttpRequest request);
