@@ -56,6 +56,14 @@ void MessageServer::processGameMap(char* message, size_t length)
     _log.write("Map loaded");
 }
 
+void MessageServer::processGameResult(char* message, size_t length)
+{
+    _loadedMap.assign(message, length);
+    _mapReceived.store(true);
+    _log.write("Game result loaded");
+    _log.write(string("Broadcasted:\n") + string(message, length));
+}
+
 void MessageServer::processGameObjects(char* message, size_t length)
 {
     static unsigned long objectsCounter = 0;

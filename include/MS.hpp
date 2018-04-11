@@ -140,6 +140,7 @@ private:
     void onGameDisconnetion(USocket* socket, int code, char* message, size_t length);
     void onGameMessage(USocket* socket, char* message, size_t length, uWS::OpCode opCode);
     void processGameMap(char* message, size_t length);
+    void processGameResult(char* message, size_t length);
     void processGameObjects(char* message, size_t length);
 
     void onWebHttpRequest(uWS::HttpResponse* response, uWS::HttpRequest request, char *data, size_t length, size_t remainingBytes);

@@ -13,6 +13,7 @@ MessageServer::MessageServer() : GAME_MESSAGE_PROCESSOR{}, WEB_MESSAGE_PROCESSOR
     // need array initialization like that {1, 2, [10] = 3, 4}
     const_cast<MessageProcessor&>(GAME_MESSAGE_PROCESSOR['o']) = &MessageServer::processGameObjects;
     const_cast<MessageProcessor&>(GAME_MESSAGE_PROCESSOR['m']) = &MessageServer::processGameMap;
+    const_cast<MessageProcessor&>(GAME_MESSAGE_PROCESSOR['r']) = &MessageServer::processGameResult;
     const_cast<MessageProcessor&>(WEB_MESSAGE_PROCESSOR['l']) = &MessageServer::processWebClientLogin;
     const_cast<MessageProcessor&>(WEB_MESSAGE_PROCESSOR['e']) = &MessageServer::processWebClientLogout;
     const_cast<MessageProcessor&>(WEB_MESSAGE_PROCESSOR['p']) = &MessageServer::processWebAddPlayer;
