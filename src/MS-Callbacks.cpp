@@ -58,10 +58,15 @@ void MessageServer::processGameMap(char* message, size_t length)
 
 void MessageServer::processGameResult(char* message, size_t length)
 {
-    _loadedMap.assign(message, length);
-    _mapReceived.store(true);
     _log.write("Game result loaded");
     _log.write(string("Broadcasted:\n") + string(message, length));
+    if (cmpxchng(_objectsSending))
+    {
+        injectObjectsSending(message, length);
+        _objectsSending.store(false);
+    }
+    else
+        _log.write("Last game result pack not sent yet");
 }
 
 void MessageServer::processGameObjects(char* message, size_t length)
